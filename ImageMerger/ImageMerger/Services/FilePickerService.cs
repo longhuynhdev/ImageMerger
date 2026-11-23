@@ -10,9 +10,6 @@ namespace ImageMerger.Services;
 /// </summary>
 public sealed class FilePickerService(WindowId windowId) : IFilePickerService
 {
-    /// <summary>Phase 1 chỉ hỗ trợ PNG/JPEG. Phase 7 sẽ thêm WebP, HEIC, PDF.</summary>
-    private static readonly string[] ImageExtensions = [".png", ".jpg", ".jpeg"];
-
     public async Task<IReadOnlyList<string>> PickImagesAsync()
     {
         var picker = new FileOpenPicker(windowId)
@@ -20,12 +17,27 @@ public sealed class FilePickerService(WindowId windowId) : IFilePickerService
             SuggestedStartLocation = PickerLocationId.PicturesLibrary,
             ViewMode = PickerViewMode.Thumbnail,
         };
-        foreach (string extension in ImageExtensions)
+        foreach (string extension in SupportedFormats.InputExtensions)
         {
             picker.FileTypeFilter.Add(extension);
         }
 
         var results = await picker.PickMultipleFilesAsync();
         return results.Select(r => r.Path).ToList();
+    }
+
+    public async Task<string?> PickSaveFileAsync(string suggestedFileName, string fileTypeLabel, string extension)
+    {
+        var picker = new FileSavePicker(windowId)
+        {
+            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
+            SuggestedFileName = suggestedFileName,
+            DefaultFileExtension = extension,
+        };
+        picker.FileTypeChoices.Add(fileTypeLabel, [extension]);
+
+        // Người dùng bấm Huỷ thì kết quả là null.
+        PickFileResult? result = await picker.PickSaveFileAsync();
+        return result?.Path;
     }
 }

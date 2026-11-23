@@ -1,4 +1,3 @@
-# BUILD_PLAN.md — ImageMerger
 
 Kế hoạch build dự án từng phần. Mỗi phase kết thúc ở trạng thái **build được, chạy được, dùng thử được**.
 Bối cảnh chung của dự án nằm trong `CLAUDE.md`.
@@ -58,13 +57,13 @@ Bối cảnh chung của dự án nằm trong `CLAUDE.md`.
 
 **Học được:** `CanReorderItems`, `MenuFlyout`, `ListView.Footer`, sự kiện drag & drop (`DragOver`, `Drop`).
 
-- [ ] Bật `CanReorderItems="True" CanDragItems="True" AllowDrop="True"` cho `ListView`.
-- [ ] Nút tay cầm bên trái mỗi item, mở `MenuFlyout`: **Lên đầu / Lên 1 / Xuống 1 / Xuống cuối**.
-- [ ] Nút **Xoá** bên phải mỗi item.
-- [ ] Item giữ callback về `MainViewModel` để tự di chuyển hoặc xoá mình.
-- [ ] Nút **Thêm ảnh** đặt trong `ListView.Footer`, luôn nằm sau ảnh cuối.
-- [ ] `CommandBar` phía trên: **Thêm ảnh**, **Sắp xếp ▾** (theo tên, theo ngày), **Xoá hết**.
-- [ ] Kéo file từ Explorer thả vào cửa sổ để thêm ảnh. Bỏ qua và báo các file không được hỗ trợ.
+- [x] Bật `CanReorderItems="True" CanDragItems="True" AllowDrop="True"` cho `ListView`.
+- [x] Nút tay cầm bên trái mỗi item, mở `MenuFlyout`: **Lên đầu / Lên 1 / Xuống 1 / Xuống cuối**.
+- [x] Nút **Xoá** bên phải mỗi item.
+- [x] Item giữ callback về `MainViewModel` để tự di chuyển hoặc xoá mình.
+- [x] Nút **Thêm ảnh** đặt trong `ListView.Footer`, luôn nằm sau ảnh cuối.
+- [x] `CommandBar` phía trên: **Thêm ảnh**, **Sắp xếp ▾** (theo tên, theo ngày), **Xoá hết**.
+- [x] Kéo file từ Explorer thả vào cửa sổ để thêm ảnh. Bỏ qua và báo các file không được hỗ trợ.
 
 **Xong khi:** sắp xếp được bằng cả kéo thả lẫn menu, xoá được, thêm được ảnh liên tục, kéo được file từ Explorer vào.
 
@@ -74,11 +73,11 @@ Bối cảnh chung của dự án nằm trong `CLAUDE.md`.
 
 **Học được:** `FileSavePicker`, `ProgressBar`, `InfoBar`, `CancellationToken`.
 
-- [ ] Interface `IExporter` với `Task ExportAsync(IReadOnlyList<ImageSourceInfo>, ExportOptions, IProgress<double>, CancellationToken)`.
-- [ ] `PdfExporter`: mỗi ảnh một trang, kích thước trang theo ảnh. Dùng Magick.NET, nén JPEG bên trong với quality 85.
-- [ ] Nút **Xuất ảnh** trên `CommandBar` mở `FileSavePicker` với lựa chọn `.pdf`.
-- [ ] Hiện `ProgressBar` khi đang xuất, có nút **Huỷ**.
-- [ ] Hiện `InfoBar` khi xong (đường dẫn file, dung lượng) hoặc khi lỗi.
+- [x] Interface `IExporter` với `Task ExportAsync(IReadOnlyList<ImageSourceInfo>, ExportOptions, IProgress<double>, CancellationToken)`.
+- [x] `PdfExporter`: mỗi ảnh một trang, kích thước trang theo ảnh. Dùng Magick.NET, nén JPEG bên trong với quality 85.
+- [x] Nút **Xuất ảnh** trên `CommandBar` mở `FileSavePicker` với lựa chọn `.pdf`.
+- [x] Hiện `ProgressBar` khi đang xuất, có nút **Huỷ**.
+- [x] Hiện `InfoBar` khi xong (đường dẫn file, dung lượng) hoặc khi lỗi.
 
 **Xong khi:** gộp 20 ảnh thành PDF đúng thứ tự trên màn hình và mở được bằng trình đọc PDF. 🎉 **MVP hoàn thành.**
 

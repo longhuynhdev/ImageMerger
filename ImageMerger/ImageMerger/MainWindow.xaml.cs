@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using ImageMerger.Services;
+using ImageMerger.Services.Export;
 using ImageMerger.ViewModels;
 using ImageMerger.Views;
 using Microsoft.UI;
@@ -30,7 +31,7 @@ public sealed partial class MainWindow : Window
         AppWindow.SetIcon("Assets/AppIcon.ico");
         ResizeToDefault();
 
-        var viewModel = new MainViewModel(new FilePickerService(AppWindow.Id), new ThumbnailService());
+        var viewModel = new MainViewModel(new FilePickerService(AppWindow.Id), new ThumbnailService(), new PdfExporter());
         RootFrame.Navigate(typeof(MainPage), viewModel);
     }
 

@@ -9,10 +9,115 @@
     xmlns:vm="using:ImageMerger.ViewModels"
     mc:Ignorable="d">
 
-    <Grid Padding="24,8,24,24">
+    <!--
+        AllowDrop + Background (dù là Transparent) để cả trang nhận được file kéo từ Explorer.
+        Không có Background thì vùng trống không "bắt" được chuột/kéo thả.
+        Sự kiện DragOver/Drop được đăng ký trong code-behind (xem MainPage.xaml.cs).
+    -->
+    <Grid
+        x:Name="RootGrid"
+        Padding="24,0,24,24"
+        AllowDrop="True"
+        Background="Transparent"
+        RowSpacing="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!--
+            CommandBar: thanh lệnh chuẩn của WinUI. AppBarButton là nút có icon + nhãn.
+            DefaultLabelPosition="Right" hiện nhãn cạnh icon thay vì ẩn đi.
+        -->
+        <CommandBar
+            HorizontalAlignment="Left"
+            DefaultLabelPosition="Right"
+            Visibility="{x:Bind views:MainPage.ToVisibility(ViewModel.HasItems), Mode=OneWay}">
+            <AppBarButton
+                Command="{x:Bind ViewModel.AddImagesCommand}"
+                Icon="Add"
+                Label="Thêm ảnh" />
+
+            <!--  AppBarButton có Flyout: bấm vào sẽ mở menu thả xuống (Sắp xếp ▾)  -->
+            <AppBarButton Icon="Sort" Label="Sắp xếp">
+                <AppBarButton.Flyout>
+                    <MenuFlyout Placement="Bottom">
+                        <MenuFlyoutItem Command="{x:Bind ViewModel.SortByNameCommand}" Text="Theo tên" />
+                        <MenuFlyoutItem Command="{x:Bind ViewModel.SortByDateCommand}" Text="Theo ngày sửa" />
+                    </MenuFlyout>
+                </AppBarButton.Flyout>
+            </AppBarButton>
+
+            <!--  Xoá hết cần xác nhận: Flyout nhỏ với nút xác nhận, nhẹ hơn ContentDialog  -->
+            <AppBarButton
+                Icon="Delete"
+                IsEnabled="{x:Bind ViewModel.HasItems, Mode=OneWay}"
+                Label="Xoá hết">
+                <AppBarButton.Flyout>
+                    <Flyout x:Name="ClearAllFlyout">
+                        <StackPanel Spacing="12">
+                            <TextBlock Text="Xoá tất cả ảnh khỏi danh sách?" />
+                            <TextBlock
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="File gốc trên máy không bị ảnh hưởng." />
+                            <Button
+                                Click="OnConfirmClearAllClick"
+                                Command="{x:Bind ViewModel.ClearAllCommand}"
+                                Content="Xoá hết"
+                                Style="{StaticResource AccentButtonStyle}" />
+                        </StackPanel>
+                    </Flyout>
+                </AppBarButton.Flyout>
+            </AppBarButton>
+
+            <AppBarSeparator />
+
+            <AppBarButton
+                Command="{x:Bind ViewModel.ExportCommand}"
+                Icon="Save"
+                Label="Xuất ảnh" />
+        </CommandBar>
+
+        <!--  InfoBar: thông báo ngay trong trang, không chặn thao tác như hộp thoại  -->
+        <InfoBar
+            Grid.Row="1"
+            IsOpen="{x:Bind ViewModel.IsStatusOpen, Mode=TwoWay}"
+            Message="{x:Bind ViewModel.StatusMessage, Mode=OneWay}"
+            Severity="{x:Bind ViewModel.StatusSeverity, Mode=OneWay}"
+            Title="{x:Bind ViewModel.StatusTitle, Mode=OneWay}" />
+
+        <!--
+            Thanh tiến độ khi đang xuất. ProgressBar với Maximum=100 hiển thị phần trăm;
+            nút Huỷ bind vào ExportCancelCommand do [RelayCommand(IncludeCancelCommand = true)] sinh ra.
+        -->
+        <Grid
+            Grid.Row="2"
+            ColumnSpacing="16"
+            Visibility="{x:Bind views:MainPage.ToVisibility(ViewModel.IsExporting), Mode=OneWay}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock VerticalAlignment="Center" Text="Đang xuất PDF…" />
+            <ProgressBar
+                Grid.Column="1"
+                VerticalAlignment="Center"
+                AutomationProperties.Name="Tiến độ xuất"
+                Maximum="100"
+                Value="{x:Bind ViewModel.ExportProgress, Mode=OneWay}" />
+            <Button
+                Grid.Column="2"
+                Command="{x:Bind ViewModel.ExportCancelCommand}"
+                Content="Huỷ" />
+        </Grid>
 
         <!--  Màn hình trống: chỉ hiện khi chưa có ảnh nào  -->
         <StackPanel
+            Grid.Row="3"
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
             Spacing="16"
@@ -25,6 +130,10 @@
                 HorizontalAlignment="Center"
                 Style="{StaticResource SubtitleTextBlockStyle}"
                 Text="Chưa có ảnh nào" />
+            <TextBlock
+                HorizontalAlignment="Center"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Text="Bấm Thêm ảnh hoặc kéo file từ Explorer vào đây" />
             <Button
                 HorizontalAlignment="Center"
                 Command="{x:Bind ViewModel.AddImagesCommand}"
@@ -32,22 +141,65 @@
                 Style="{StaticResource AccentButtonStyle}" />
         </StackPanel>
 
-        <!--  Danh sách ảnh: chỉ hiện khi có ít nhất một ảnh  -->
+        <!--
+            CanReorderItems + CanDragItems + AllowDrop: ListView tự xử lý kéo thả để đổi thứ tự.
+            Khi thả, ListView gọi Remove + Insert trên ObservableCollection, nên ViewModel
+            luôn giữ đúng thứ tự mà không cần code thêm.
+        -->
         <ListView
+            Grid.Row="3"
+            AllowDrop="True"
             AutomationProperties.Name="Danh sách ảnh"
+            CanDragItems="True"
+            CanReorderItems="True"
             ItemsSource="{x:Bind ViewModel.Items}"
             SelectionMode="None"
             Visibility="{x:Bind views:MainPage.ToVisibility(ViewModel.HasItems), Mode=OneWay}">
             <ListView.ItemTemplate>
                 <!--  x:DataType cho x:Bind biết kiểu của từng item để kiểm tra lúc compile  -->
                 <DataTemplate x:DataType="vm:ImageItemViewModel">
-                    <Grid Padding="0,8" ColumnSpacing="16">
+                    <Grid Padding="0,8" ColumnSpacing="12">
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="96" />
                             <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
+                        <!--  Tay cầm: mở MenuFlyout để di chuyển bằng chuột/bàn phím thay vì kéo  -->
+                        <Button
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="Di chuyển"
+                            ToolTipService.ToolTip="Di chuyển">
+                            <FontIcon FontSize="16" Glyph="&#xE76F;" />
+                            <Button.Flyout>
+                                <MenuFlyout>
+                                    <MenuFlyoutItem Command="{x:Bind MoveToTopCommand}" Text="Lên đầu">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="&#xEDDB;" />
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                    <MenuFlyoutItem Command="{x:Bind MoveUpCommand}" Text="Lên 1">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="&#xE70E;" />
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                    <MenuFlyoutItem Command="{x:Bind MoveDownCommand}" Text="Xuống 1">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="&#xE70D;" />
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                    <MenuFlyoutItem Command="{x:Bind MoveToBottomCommand}" Text="Xuống cuối">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="&#xEDDC;" />
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                </MenuFlyout>
+                            </Button.Flyout>
+                        </Button>
+
                         <Border
+                            Grid.Column="1"
                             Width="96"
                             Height="96"
                             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
@@ -62,7 +214,7 @@
                         </Border>
 
                         <StackPanel
-                            Grid.Column="1"
+                            Grid.Column="2"
                             VerticalAlignment="Center"
                             Spacing="2">
                             <TextBlock
@@ -74,9 +226,30 @@
                                 Style="{StaticResource CaptionTextBlockStyle}"
                                 Text="{x:Bind SizeText, Mode=OneWay}" />
                         </StackPanel>
+
+                        <Button
+                            Grid.Column="3"
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="Xoá ảnh"
+                            Command="{x:Bind RemoveCommand}"
+                            ToolTipService.ToolTip="Xoá khỏi danh sách">
+                            <SymbolIcon Symbol="Delete" />
+                        </Button>
                     </Grid>
                 </DataTemplate>
             </ListView.ItemTemplate>
+
+            <!--  Footer: luôn nằm sau item cuối cùng và cuộn cùng danh sách  -->
+            <ListView.Footer>
+                <Button
+                    Margin="0,8,0,0"
+                    Command="{x:Bind ViewModel.AddImagesCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <SymbolIcon Symbol="Add" />
+                        <TextBlock Text="Thêm ảnh" />
+                    </StackPanel>
+                </Button>
+            </ListView.Footer>
         </ListView>
     </Grid>
 </Page>
