@@ -82,10 +82,20 @@ public sealed partial class MainPage : Page
         e.Handled = true;
     }
 
+    /// <summary>
+    /// Mở hộp thoại Xuất (việc thuần UI nên được làm ở code-behind). Nếu người dùng bấm "Xuất",
+    /// giao cho ViewModel làm phần còn lại với tuỳ chọn vừa chọn.
+    /// ContentDialog cần XamlRoot để biết hiện trên cửa sổ nào.
+    /// </summary>
+    private async void OnExportClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ExportDialog(ViewModel.ExportSettings) { XamlRoot = XamlRoot };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+        {
+            await ViewModel.ExportCommand.ExecuteAsync(null);
+        }
+    }
+
     /// <summary>Flyout không tự đóng khi bấm nút bên trong, nên đóng nó sau khi xác nhận xoá.</summary>
     private void OnConfirmClearAllClick(object sender, RoutedEventArgs e) => ClearAllFlyout.Hide();
-
-    /// <summary>Hàm tĩnh dùng trong x:Bind thay cho IValueConverter: bool → Visibility.</summary>
-    public static Visibility ToVisibility(bool isVisible) =>
-        isVisible ? Visibility.Visible : Visibility.Collapsed;
 }

@@ -87,11 +87,11 @@ Bối cảnh chung của dự án nằm trong `CLAUDE.md`.
 
 **Học được:** `ContentDialog`, `RadioButtons`, `ComboBox`, `NumberBox`, `ColorPicker`.
 
-- [ ] `ExportDialog` (`ContentDialog`): định dạng (PDF/PNG/WebP), chiều rộng tối đa, khoảng cách giữa các ảnh, màu nền.
-- [ ] `ExportViewModel` giữ các tuỳ chọn và kiểm tra tính hợp lệ.
-- [ ] `PngExporter` / `WebpExporter`: thu phóng các ảnh về cùng chiều rộng, ghép bằng `AppendVertically()`.
-- [ ] Kiểm tra **giới hạn 16383 px của WebP** trước khi xuất. Nếu vượt: báo rõ và gợi ý giảm chiều rộng hoặc dùng PNG.
-- [ ] Đặt `ResourceLimits` cho Magick.NET để tránh tràn RAM.
+- [x] `ExportDialog` (`ContentDialog`): định dạng (PDF/PNG/WebP), chiều rộng tối đa, khoảng cách giữa các ảnh, màu nền.
+- [x] `ExportViewModel` giữ các tuỳ chọn và kiểm tra tính hợp lệ.
+- [x] `PngExporter` / `WebpExporter`: thu phóng các ảnh về cùng chiều rộng, ghép bằng `AppendVertically()`.
+- [x] Kiểm tra **giới hạn 16383 px của WebP** trước khi xuất. Nếu vượt: báo rõ và gợi ý giảm chiều rộng hoặc dùng PNG.
+- [x] Đặt `ResourceLimits` cho Magick.NET để tránh tràn RAM.
 
 **Xong khi:** xuất được ảnh dài PNG và WebP đúng thứ tự. Trường hợp vượt giới hạn WebP được báo lỗi tử tế, app không crash.
 
@@ -101,11 +101,11 @@ Bối cảnh chung của dự án nằm trong `CLAUDE.md`.
 
 **Học được:** `Slider`, đổi `Visibility` theo lựa chọn, bind enum vào UI.
 
-- [ ] `CompressionPreset`: **Gốc / Cân bằng / Nhỏ gọn / Tuỳ chỉnh**. Bảng giá trị xem `CLAUDE.md` mục 3.1.
-- [ ] Trong `ExportDialog`: chọn preset. Khi chọn **Tuỳ chỉnh** thì hiện `Slider` quality (1–100) và `NumberBox` chiều rộng tối đa.
-- [ ] Các control chỉ hiện khi có ý nghĩa với định dạng đang chọn. Ví dụ: PNG không có slider quality mà có nút bật/tắt **giảm màu (PNG-8)**.
-- [ ] Ghi chú ngắn trong UI rằng PNG là lossless, muốn nhỏ hơn thì giảm kích thước hoặc giảm màu.
-- [ ] Các exporter nhận `Quality` và `MaxWidth` từ `ExportOptions`.
+- [x] `CompressionPreset`: **Gốc / Cân bằng / Nhỏ gọn / Tuỳ chỉnh**. Bảng giá trị xem `CLAUDE.md` mục 3.1.
+- [x] Trong `ExportDialog`: chọn preset. Khi chọn **Tuỳ chỉnh** thì hiện `Slider` quality (1–100) và `NumberBox` chiều rộng tối đa.
+- [x] Các control chỉ hiện khi có ý nghĩa với định dạng đang chọn. Ví dụ: PNG không có slider quality mà có nút bật/tắt **giảm màu (PNG-8)**.
+- [x] Ghi chú ngắn trong UI rằng PNG là lossless, muốn nhỏ hơn thì giảm kích thước hoặc giảm màu.
+- [x] Các exporter nhận `Quality` và `MaxWidth` từ `ExportOptions`.
 
 **Xong khi:** cùng một bộ ảnh, xuất với 3 preset cho ra 3 file có dung lượng khác nhau rõ rệt.
 

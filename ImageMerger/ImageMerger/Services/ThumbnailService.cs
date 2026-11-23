@@ -23,11 +23,7 @@ public sealed class ThumbnailService
         cancellationToken.ThrowIfCancellationRequested();
 
         // Chỉ đọc header để lấy kích thước gốc, không decode pixel.
-        var info = new MagickImageInfo(path);
-        bool isRotated = info.Orientation is Orientation.LeftTop or Orientation.RightTop
-                                          or Orientation.RightBottom or Orientation.LeftBottom;
-        int width = (int)(isRotated ? info.Height : info.Width);
-        int height = (int)(isRotated ? info.Width : info.Height);
+        (int width, int height) = ImageHeader.ReadOrientedSize(path);
 
         // Với JPEG: báo trước kích thước cần, libjpeg sẽ decode ở độ phân giải thấp hơn
         // (1/2, 1/4, 1/8), nhanh và tốn ít RAM hơn nhiều so với decode ảnh 12 MP rồi mới thu nhỏ.

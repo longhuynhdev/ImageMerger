@@ -31,7 +31,10 @@ public sealed partial class MainWindow : Window
         AppWindow.SetIcon("Assets/AppIcon.ico");
         ResizeToDefault();
 
-        var viewModel = new MainViewModel(new FilePickerService(AppWindow.Id), new ThumbnailService(), new PdfExporter());
+        var viewModel = new MainViewModel(
+            new FilePickerService(AppWindow.Id),
+            new ThumbnailService(),
+            (IExporter[])[new PdfExporter(), new PngExporter(), new WebpExporter()]);
         RootFrame.Navigate(typeof(MainPage), viewModel);
     }
 

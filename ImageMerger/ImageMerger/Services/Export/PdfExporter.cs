@@ -14,6 +14,8 @@ public sealed class PdfExporter : IExporter
     /// <summary>Acrobat không mở được trang lớn hơn 200 inch (14400 pt), ví dụ ảnh chụp màn hình rất dài.</summary>
     private const double MaxPageSizePoints = 14400;
 
+    public ExportFormat Format => ExportFormat.Pdf;
+
     public Task ExportAsync(
         IReadOnlyList<ImageSourceInfo> sources,
         string outputPath,
@@ -32,71 +34,53 @@ public sealed class PdfExporter : IExporter
         IProgress<double>? progress,
         CancellationToken cancellationToken)
     {
-        // Ghi vào file tạm rồi mới đổi tên: nếu huỷ hoặc lỗi giữa chừng thì không để lại file PDF hỏng.
-        string tempPath = outputPath + ".tmp";
-        try
+        ExportFile.WriteAtomically(outputPath, tempPath =>
         {
-            using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            using var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None);
+            var writer = new JpegPdfWriter(stream);
+            for (int i = 0; i < sources.Count; i++)
             {
-                var writer = new JpegPdfWriter(stream);
-                for (int i = 0; i < sources.Count; i++)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
+                cancellationToken.ThrowIfCancellationRequested();
 
-                    EncodedPage page = EncodePage(sources[i], options.Quality);
-                    (double width, double height) = GetPageSize(page.PixelWidth, page.PixelHeight);
-                    writer.AddPage(page.Jpeg, page.PixelWidth, page.PixelHeight, page.IsGray, width, height);
+                EncodedPage page = EncodePage(sources[i], options);
+                (double width, double height) = GetPageSize(page.PixelWidth, page.PixelHeight);
+                writer.AddPage(page.Jpeg, page.PixelWidth, page.PixelHeight, page.IsGray, width, height);
 
-                    progress?.Report((i + 1) / (double)sources.Count);
-                }
-                writer.Finish();
+                progress?.Report((i + 1) / (double)sources.Count);
             }
-            File.Move(tempPath, outputPath, overwrite: true);
-        }
-        catch
-        {
-            File.Delete(tempPath); // không báo lỗi nếu file không tồn tại
-            throw;
-        }
+            writer.Finish();
+        });
     }
 
     private sealed record EncodedPage(byte[] Jpeg, int PixelWidth, int PixelHeight, bool IsGray);
 
     /// <summary>Đọc một ảnh gốc, chuẩn hoá và nén JPEG. Ảnh gốc được Dispose ngay khi xong.</summary>
-    private static EncodedPage EncodePage(ImageSourceInfo source, int quality)
+    private static EncodedPage EncodePage(ImageSourceInfo source, ExportOptions options)
     {
-        try
+        using MagickImage image = ExportImageLoader.Load(source, options.MaxWidth);
+
+        // JPEG không có kênh trong suốt: phủ nền trắng thay vì để vùng trong suốt thành đen.
+        if (image.HasAlpha)
         {
-            using var image = new MagickImage(source.Path);
-            image.AutoOrient();
-
-            // JPEG không có kênh trong suốt: phủ nền trắng thay vì để vùng trong suốt thành đen.
-            if (image.HasAlpha)
-            {
-                image.BackgroundColor = MagickColors.White;
-                image.Alpha(AlphaAction.Remove);
-            }
-
-            // PDF ở đây chỉ khai báo RGB hoặc Gray, nên đưa ảnh CMYK... về sRGB.
-            if (image.ColorSpace is not ColorSpace.sRGB and not ColorSpace.Gray)
-            {
-                image.ColorSpace = ColorSpace.sRGB;
-            }
-
-            image.Strip(); // bỏ EXIF/metadata: ảnh đã được xoay đúng, không cần nữa
-            image.Quality = (uint)quality;
-            byte[] jpeg = image.ToByteArray(MagickFormat.Jpeg);
-
-            // Hỏi lại chính file JPEG vừa tạo xem là 1 kênh (Gray) hay 3 kênh (RGB),
-            // vì ImageMagick có thể tự ghi ảnh trắng đen thành JPEG xám.
-            bool isGray = new MagickImageInfo(jpeg).ColorSpace == ColorSpace.Gray;
-
-            return new EncodedPage(jpeg, (int)image.Width, (int)image.Height, isGray);
+            image.BackgroundColor = MagickColors.White;
+            image.Alpha(AlphaAction.Remove);
         }
-        catch (MagickException ex)
+
+        // PDF ở đây chỉ khai báo RGB hoặc Gray, nên đưa ảnh CMYK... về sRGB.
+        if (image.ColorSpace is not ColorSpace.sRGB and not ColorSpace.Gray)
         {
-            throw new InvalidDataException($"Không đọc được ảnh \"{Path.GetFileName(source.Path)}\".", ex);
+            image.ColorSpace = ColorSpace.sRGB;
         }
+
+        image.Strip(); // bỏ EXIF/metadata: ảnh đã được xoay đúng, không cần nữa
+        image.Quality = (uint)options.Quality;
+        byte[] jpeg = image.ToByteArray(MagickFormat.Jpeg);
+
+        // Hỏi lại chính file JPEG vừa tạo xem là 1 kênh (Gray) hay 3 kênh (RGB),
+        // vì ImageMagick có thể tự ghi ảnh trắng đen thành JPEG xám.
+        bool isGray = new MagickImageInfo(jpeg).ColorSpace == ColorSpace.Gray;
+
+        return new EncodedPage(jpeg, (int)image.Width, (int)image.Height, isGray);
     }
 
     private static (double Width, double Height) GetPageSize(int pixelWidth, int pixelHeight)

@@ -14,17 +14,18 @@ public sealed partial class MainViewModel : ObservableObject
 {
     private readonly IFilePickerService _filePickerService;
     private readonly ThumbnailService _thumbnailService;
-    private readonly IExporter _pdfExporter;
+    private readonly IReadOnlyList<IExporter> _exporters;
 
     /// <summary>Các ảnh đang chờ tạo thumbnail. Chỉ truy cập trên UI thread nên không cần lock.</summary>
     private readonly Queue<ImageItemViewModel> _thumbnailQueue = new();
     private bool _isProcessingThumbnails;
 
-    public MainViewModel(IFilePickerService filePickerService, ThumbnailService thumbnailService, IExporter pdfExporter)
+    /// <param name="exporters">Mỗi định dạng một exporter (PDF, PNG, WebP).</param>
+    public MainViewModel(IFilePickerService filePickerService, ThumbnailService thumbnailService, IReadOnlyList<IExporter> exporters)
     {
         _filePickerService = filePickerService;
         _thumbnailService = thumbnailService;
-        _pdfExporter = pdfExporter;
+        _exporters = exporters;
 
         // ObservableCollection báo cho ListView mỗi khi thêm/xoá phần tử,
         // nhưng không báo cho IsEmpty/HasItems. Ta tự báo khi collection thay đổi.
@@ -123,8 +124,19 @@ public sealed partial class MainViewModel : ObservableObject
 
     // --- Xuất file ---
 
+    /// <summary>Tuỳ chọn của hộp thoại Xuất. Giữ lại giữa các lần xuất.</summary>
+    public ExportViewModel ExportSettings { get; } = new();
+
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanExport))]
     public partial bool IsExporting { get; set; }
+
+    /// <summary>Nút "Xuất ảnh" mở hộp thoại từ code-behind, nên cần một property để bật/tắt nó.</summary>
+    public bool CanExport => HasItems && !IsExporting;
+
+    /// <summary>Ví dụ "Đang xuất WebP…", hiện cạnh thanh tiến độ.</summary>
+    [ObservableProperty]
+    public partial string ExportingText { get; set; } = "";
 
     /// <summary>Tiến độ xuất, 0–100, bind vào ProgressBar.</summary>
     [ObservableProperty]
@@ -134,11 +146,22 @@ public sealed partial class MainViewModel : ObservableObject
     /// IncludeCancelCommand = true: toolkit sinh thêm <c>ExportCancelCommand</c>.
     /// Gọi command đó sẽ huỷ <paramref name="cancellationToken"/> của lần xuất đang chạy,
     /// nên nút "Huỷ" chỉ cần bind vào nó, không phải tự quản lý CancellationTokenSource.
+    /// Được gọi sau khi người dùng bấm "Xuất" trong ExportDialog, dùng tuỳ chọn trong <see cref="ExportSettings"/>.
     /// </summary>
     [RelayCommand(IncludeCancelCommand = true, CanExecute = nameof(HasItems))]
     private async Task ExportAsync(CancellationToken cancellationToken)
     {
-        string? outputPath = await _filePickerService.PickSaveFileAsync("Ảnh đã gộp", "Tài liệu PDF", ".pdf");
+        ExportOptions options = ExportSettings.ToOptions();
+        IExporter exporter = _exporters.Single(e => e.Format == options.Format);
+        string formatName = options.Format switch
+        {
+            ExportFormat.Png => "PNG",
+            ExportFormat.Webp => "WebP",
+            _ => "PDF",
+        };
+
+        string? outputPath = await _filePickerService.PickSaveFileAsync(
+            "Ảnh đã gộp", $"Tệp {formatName}", ExportSettings.FileExtension);
         if (outputPath is null) return;
 
         // Chụp lại danh sách tại thời điểm bấm Xuất. Kích thước có thể chưa biết (thumbnail chưa xong),
@@ -152,11 +175,12 @@ public sealed partial class MainViewModel : ObservableObject
         var progress = new Progress<double>(value => ExportProgress = value * 100);
 
         IsExporting = true;
+        ExportingText = $"Đang xuất {formatName}…";
         ExportProgress = 0;
         IsStatusOpen = false;
         try
         {
-            await _pdfExporter.ExportAsync(sources, outputPath, new ExportOptions(), progress, cancellationToken);
+            await exporter.ExportAsync(sources, outputPath, options, progress, cancellationToken);
 
             long size = new FileInfo(outputPath).Length;
             ShowStatus(
@@ -167,6 +191,11 @@ public sealed partial class MainViewModel : ObservableObject
         catch (OperationCanceledException)
         {
             ShowStatus(InfoBarSeverity.Informational, "Đã huỷ xuất file", "");
+        }
+        catch (ExportValidationException ex)
+        {
+            // Lỗi biết trước (ví dụ vượt giới hạn WebP): message đã kèm gợi ý cách sửa.
+            ShowStatus(InfoBarSeverity.Warning, $"Không thể xuất {formatName}", ex.Message);
         }
         catch (Exception ex)
         {
@@ -233,6 +262,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(HasItems));
+        OnPropertyChanged(nameof(CanExport));
         SortByNameCommand.NotifyCanExecuteChanged();
         SortByDateCommand.NotifyCanExecuteChanged();
         ClearAllCommand.NotifyCanExecuteChanged();

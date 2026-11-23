@@ -5,7 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:views="using:ImageMerger.Views"
+    xmlns:helpers="using:ImageMerger.Helpers"
     xmlns:vm="using:ImageMerger.ViewModels"
     mc:Ignorable="d">
 
@@ -34,7 +34,7 @@
         <CommandBar
             HorizontalAlignment="Left"
             DefaultLabelPosition="Right"
-            Visibility="{x:Bind views:MainPage.ToVisibility(ViewModel.HasItems), Mode=OneWay}">
+            Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(ViewModel.HasItems), Mode=OneWay}">
             <AppBarButton
                 Command="{x:Bind ViewModel.AddImagesCommand}"
                 Icon="Add"
@@ -76,7 +76,8 @@
             <AppBarSeparator />
 
             <AppBarButton
-                Command="{x:Bind ViewModel.ExportCommand}"
+                Click="OnExportClick"
+                IsEnabled="{x:Bind ViewModel.CanExport, Mode=OneWay}"
                 Icon="Save"
                 Label="Xuất ảnh" />
         </CommandBar>
@@ -96,13 +97,13 @@
         <Grid
             Grid.Row="2"
             ColumnSpacing="16"
-            Visibility="{x:Bind views:MainPage.ToVisibility(ViewModel.IsExporting), Mode=OneWay}">
+            Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(ViewModel.IsExporting), Mode=OneWay}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBlock VerticalAlignment="Center" Text="Đang xuất PDF…" />
+            <TextBlock VerticalAlignment="Center" Text="{x:Bind ViewModel.ExportingText, Mode=OneWay}" />
             <ProgressBar
                 Grid.Column="1"
                 VerticalAlignment="Center"
@@ -121,7 +122,7 @@
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
             Spacing="16"
-            Visibility="{x:Bind views:MainPage.ToVisibility(ViewModel.IsEmpty), Mode=OneWay}">
+            Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(ViewModel.IsEmpty), Mode=OneWay}">
             <FontIcon
                 FontSize="48"
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
@@ -154,7 +155,7 @@
             CanReorderItems="True"
             ItemsSource="{x:Bind ViewModel.Items}"
             SelectionMode="None"
-            Visibility="{x:Bind views:MainPage.ToVisibility(ViewModel.HasItems), Mode=OneWay}">
+            Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(ViewModel.HasItems), Mode=OneWay}">
             <ListView.ItemTemplate>
                 <!--  x:DataType cho x:Bind biết kiểu của từng item để kiểm tra lúc compile  -->
                 <DataTemplate x:DataType="vm:ImageItemViewModel">
