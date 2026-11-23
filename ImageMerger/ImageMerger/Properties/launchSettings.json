@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "ImageMerger (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "ImageMerger (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
