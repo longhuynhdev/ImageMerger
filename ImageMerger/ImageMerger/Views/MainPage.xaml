@@ -92,7 +92,7 @@
 
         <!--
             Thanh tiến độ khi đang xuất. ProgressBar với Maximum=100 hiển thị phần trăm;
-            nút Huỷ bind vào ExportCancelCommand do [RelayCommand(IncludeCancelCommand = true)] sinh ra.
+            nút Huỷ bind vào ExportCancelCommand, command này huỷ CancellationTokenSource của lần xuất đang chạy.
         -->
         <Grid
             Grid.Row="2"

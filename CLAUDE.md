@@ -79,7 +79,7 @@ Phần lớn công cụ gộp ảnh chỉ có nút "Xuất". Người dùng khô
 |---|---|
 | Runtime | **.NET 10** |
 | UI | **WinUI 3**, Windows App SDK 1.8+ (Packaged app) |
-| MVVM | **CommunityToolkit.Mvvm** (`[ObservableProperty]`, `[RelayCommand]`) |
+| MVVM | Tự viết, **không dùng CommunityToolkit.Mvvm** (theo yêu cầu tech lead): `Helpers/BindableBase.cs` (cài `INotifyPropertyChanged`), `Helpers/RelayCommand.cs` (`RelayCommand`, `AsyncRelayCommand`) |
 | Xử lý ảnh | **Magick.NET** (gói `Magick.NET-Q8-AnyCPU`): đọc PNG/JPG/WebP/HEIC, xoay theo EXIF, resize, ghép, ghi PNG/WebP/PDF |
 | Đọc PDF (đầu vào) | `Windows.Data.Pdf.PdfDocument` (có sẵn trong Windows), render từng trang thành ảnh. *Magick.NET đọc PDF cần Ghostscript nên không dùng cho việc này.* |
 | File Picker | `Microsoft.Windows.Storage.Pickers` (`FileOpenPicker`, `FileSavePicker`) với `AppWindow.Id`. Không dùng `InitializeWithWindow` kiểu cũ. |

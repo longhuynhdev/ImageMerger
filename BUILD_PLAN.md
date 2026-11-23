@@ -27,7 +27,7 @@ Bối cảnh chung của dự án nằm trong `CLAUDE.md`.
 - [x] Tạo project bằng template **WinUI Blank App (Packaged)**, đặt tên `ImageMerger`.
 - [x] Đổi `TargetFramework` thành `net10.0-windows10.0.19041.0`, bật `<Nullable>enable</Nullable>`.
 - [x] Cập nhật Windows App SDK lên **1.8+**.
-- [x] Cài package: `CommunityToolkit.Mvvm`, `Magick.NET-Q8-AnyCPU`.
+- [x] Cài package: `Magick.NET-Q8-AnyCPU`. *(Ban đầu có `CommunityToolkit.Mvvm`, sau đã gỡ theo yêu cầu tech lead và thay bằng `INotifyPropertyChanged` tự viết.)*
 - [x] Tạo các thư mục `Models/`, `ViewModels/`, `Services/`, `Helpers/`, `Views/`.
 - [x] Tạo `MainPage.xaml` và cho `MainWindow` hiển thị trang này qua `Frame`.
 - [x] Tạo `MainViewModel` rỗng và gắn vào `MainPage` (property `ViewModel`).

@@ -1,7 +1,5 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using ImageMerger.Helpers;
 using ImageMerger.Models;
 using ImageMerger.Services;
@@ -10,8 +8,19 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace ImageMerger.ViewModels;
 
-public sealed partial class MainViewModel : ObservableObject
+public sealed class MainViewModel : BindableBase
 {
+    private bool _isStatusOpen;
+    private string _statusTitle = "";
+    private string _statusMessage = "";
+    private InfoBarSeverity _statusSeverity;
+    private bool _isExporting;
+    private string _exportingText = "";
+    private double _exportProgress;
+
+    /// <summary>Huỷ lần xuất đang chạy. Chỉ khác null trong lúc đang xuất.</summary>
+    private CancellationTokenSource? _exportCts;
+
     private readonly IFilePickerService _filePickerService;
     private readonly ThumbnailService _thumbnailService;
     private readonly IReadOnlyList<IExporter> _exporters;
@@ -27,6 +36,13 @@ public sealed partial class MainViewModel : ObservableObject
         _thumbnailService = thumbnailService;
         _exporters = exporters;
 
+        AddImagesCommand = new AsyncRelayCommand(AddImagesAsync);
+        ExportCommand = new AsyncRelayCommand(ExportAsync, () => HasItems);
+        ExportCancelCommand = new RelayCommand(() => _exportCts?.Cancel(), () => IsExporting);
+        SortByNameCommand = new RelayCommand(SortByName, () => HasItems);
+        SortByDateCommand = new RelayCommand(SortByDate, () => HasItems);
+        ClearAllCommand = new RelayCommand(ClearAll, () => HasItems);
+
         // ObservableCollection báo cho ListView mỗi khi thêm/xoá phần tử,
         // nhưng không báo cho IsEmpty/HasItems. Ta tự báo khi collection thay đổi.
         Items.CollectionChanged += OnItemsChanged;
@@ -41,25 +57,48 @@ public sealed partial class MainViewModel : ObservableObject
     // --- Thông báo (InfoBar) ---
 
     /// <summary>TwoWay: InfoBar tự đặt lại false khi người dùng bấm nút đóng.</summary>
-    [ObservableProperty]
-    public partial bool IsStatusOpen { get; set; }
+    public bool IsStatusOpen
+    {
+        get => _isStatusOpen;
+        set => SetProperty(ref _isStatusOpen, value);
+    }
 
-    [ObservableProperty]
-    public partial string StatusTitle { get; set; } = "";
+    public string StatusTitle
+    {
+        get => _statusTitle;
+        set => SetProperty(ref _statusTitle, value);
+    }
 
-    [ObservableProperty]
-    public partial string StatusMessage { get; set; } = "";
+    public string StatusMessage
+    {
+        get => _statusMessage;
+        set => SetProperty(ref _statusMessage, value);
+    }
 
-    [ObservableProperty]
-    public partial InfoBarSeverity StatusSeverity { get; set; }
+    public InfoBarSeverity StatusSeverity
+    {
+        get => _statusSeverity;
+        set => SetProperty(ref _statusSeverity, value);
+    }
+
+    // --- Command ---
+    // Các command được tạo trong constructor. AsyncRelayCommand tự chặn bấm lặp trong lúc đang chạy.
+
+    public AsyncRelayCommand AddImagesCommand { get; }
+
+    public AsyncRelayCommand ExportCommand { get; }
+
+    /// <summary>Nút "Huỷ" cạnh thanh tiến độ: huỷ <see cref="_exportCts"/> của lần xuất đang chạy.</summary>
+    public RelayCommand ExportCancelCommand { get; }
+
+    public RelayCommand SortByNameCommand { get; }
+
+    public RelayCommand SortByDateCommand { get; }
+
+    public RelayCommand ClearAllCommand { get; }
 
     // --- Thêm ảnh ---
 
-    /// <summary>
-    /// [RelayCommand] sinh ra property <c>AddImagesCommand</c> (kiểu IAsyncRelayCommand).
-    /// Với method async, command tự chặn bấm lặp trong lúc đang chạy.
-    /// </summary>
-    [RelayCommand]
     private async Task AddImagesAsync()
     {
         IReadOnlyList<string> paths = await _filePickerService.PickImagesAsync();
@@ -127,29 +166,43 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>Tuỳ chọn của hộp thoại Xuất. Giữ lại giữa các lần xuất.</summary>
     public ExportViewModel ExportSettings { get; } = new();
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanExport))]
-    public partial bool IsExporting { get; set; }
+    /// <summary>Khi IsExporting đổi thì CanExport và nút Huỷ cũng đổi theo, nên báo luôn cho chúng.</summary>
+    public bool IsExporting
+    {
+        get => _isExporting;
+        set
+        {
+            if (SetProperty(ref _isExporting, value))
+            {
+                OnPropertyChanged(nameof(CanExport));
+                ExportCancelCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
 
     /// <summary>Nút "Xuất ảnh" mở hộp thoại từ code-behind, nên cần một property để bật/tắt nó.</summary>
     public bool CanExport => HasItems && !IsExporting;
 
     /// <summary>Ví dụ "Đang xuất WebP…", hiện cạnh thanh tiến độ.</summary>
-    [ObservableProperty]
-    public partial string ExportingText { get; set; } = "";
+    public string ExportingText
+    {
+        get => _exportingText;
+        set => SetProperty(ref _exportingText, value);
+    }
 
     /// <summary>Tiến độ xuất, 0–100, bind vào ProgressBar.</summary>
-    [ObservableProperty]
-    public partial double ExportProgress { get; set; }
+    public double ExportProgress
+    {
+        get => _exportProgress;
+        set => SetProperty(ref _exportProgress, value);
+    }
 
     /// <summary>
-    /// IncludeCancelCommand = true: toolkit sinh thêm <c>ExportCancelCommand</c>.
-    /// Gọi command đó sẽ huỷ <paramref name="cancellationToken"/> của lần xuất đang chạy,
-    /// nên nút "Huỷ" chỉ cần bind vào nó, không phải tự quản lý CancellationTokenSource.
     /// Được gọi sau khi người dùng bấm "Xuất" trong ExportDialog, dùng tuỳ chọn trong <see cref="ExportSettings"/>.
+    /// Mỗi lần xuất tạo một <see cref="CancellationTokenSource"/> mới; <see cref="ExportCancelCommand"/> gọi
+    /// <c>Cancel()</c> trên nó, và exporter dừng ở lần kiểm tra token kế tiếp.
     /// </summary>
-    [RelayCommand(IncludeCancelCommand = true, CanExecute = nameof(HasItems))]
-    private async Task ExportAsync(CancellationToken cancellationToken)
+    private async Task ExportAsync()
     {
         ExportOptions options = ExportSettings.ToOptions();
         IExporter exporter = _exporters.Single(e => e.Format == options.Format);
@@ -174,13 +227,14 @@ public sealed partial class MainViewModel : ObservableObject
         // nên exporter báo tiến độ từ luồng nền vẫn cập nhật property an toàn.
         var progress = new Progress<double>(value => ExportProgress = value * 100);
 
+        _exportCts = new CancellationTokenSource();
         IsExporting = true;
         ExportingText = $"Đang xuất {formatName}…";
         ExportProgress = 0;
         IsStatusOpen = false;
         try
         {
-            await exporter.ExportAsync(sources, outputPath, options, progress, cancellationToken);
+            await exporter.ExportAsync(sources, outputPath, options, progress, _exportCts.Token);
 
             long size = new FileInfo(outputPath).Length;
             ShowStatus(
@@ -204,6 +258,8 @@ public sealed partial class MainViewModel : ObservableObject
         }
         finally
         {
+            _exportCts.Dispose();
+            _exportCts = null;
             IsExporting = false;
         }
     }
@@ -232,15 +288,12 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void RemoveItem(ImageItemViewModel item) => Items.Remove(item);
 
-    [RelayCommand(CanExecute = nameof(HasItems))]
     private void SortByName() =>
         ApplyOrder(Items.OrderBy(i => i.DisplayName, NaturalStringComparer.Instance));
 
-    [RelayCommand(CanExecute = nameof(HasItems))]
     private void SortByDate() =>
         ApplyOrder(Items.OrderBy(i => i.LastWriteTime));
 
-    [RelayCommand(CanExecute = nameof(HasItems))]
     private void ClearAll()
     {
         Items.Clear();
@@ -260,9 +313,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void OnItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        OnPropertyChanged(nameof(IsEmpty));
-        OnPropertyChanged(nameof(HasItems));
-        OnPropertyChanged(nameof(CanExport));
+        OnPropertiesChanged(nameof(IsEmpty), nameof(HasItems), nameof(CanExport));
         SortByNameCommand.NotifyCanExecuteChanged();
         SortByDateCommand.NotifyCanExecuteChanged();
         ClearAllCommand.NotifyCanExecuteChanged();

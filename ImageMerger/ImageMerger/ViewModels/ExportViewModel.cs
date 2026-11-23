@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+using ImageMerger.Helpers;
 using ImageMerger.Models;
 using ImageMerger.Services.Export;
 using Windows.UI;
@@ -11,23 +11,39 @@ namespace ImageMerger.ViewModels;
 /// Các property "ShowXxx" quyết định control nào hiện ra, để View không phải tự suy luận:
 /// mỗi control chỉ hiện khi nó có ý nghĩa với định dạng và preset đang chọn.
 /// </summary>
-public sealed partial class ExportViewModel : ObservableObject
+public sealed class ExportViewModel : BindableBase
 {
     public const int MinMaxWidth = 64;
     public const int MaxMaxWidth = 20000;
     public const int MaxSpacing = 500;
 
+    private ExportFormat _format = ExportFormat.Pdf;
+    private CompressionPreset _preset = CompressionPreset.Balanced;
+    private double _customQuality = 80;
+    private double _customMaxWidth = 2048;
+    private bool _customReduceColors;
+    private double _spacing;
+    private Color _backgroundColor = Color.FromArgb(255, 255, 255, 255);
+
     // --- Định dạng ---
 
     /// <summary>
-    /// [NotifyPropertyChangedFor]: khi Format đổi, báo luôn cho các property phụ thuộc,
+    /// Khi Format đổi, báo luôn cho các property tính toán phụ thuộc vào nó,
     /// để x:Bind cập nhật Visibility của các control liên quan.
     /// </summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FormatIndex), nameof(IsMergedFormat), nameof(IsPng), nameof(IsWebp),
-        nameof(ShowQualitySlider), nameof(ShowReduceColors), nameof(PresetSummary), nameof(ValidationMessage),
-        nameof(HasValidationError), nameof(IsValid), nameof(FileExtension))]
-    public partial ExportFormat Format { get; set; } = ExportFormat.Pdf;
+    public ExportFormat Format
+    {
+        get => _format;
+        set
+        {
+            if (SetProperty(ref _format, value))
+            {
+                OnPropertiesChanged(nameof(FormatIndex), nameof(IsMergedFormat), nameof(IsPng), nameof(IsWebp),
+                    nameof(ShowQualitySlider), nameof(ShowReduceColors), nameof(PresetSummary), nameof(ValidationMessage),
+                    nameof(HasValidationError), nameof(IsValid), nameof(FileExtension));
+            }
+        }
+    }
 
     /// <summary>
     /// RadioButtons làm việc với SelectedIndex (số nguyên), còn ViewModel dùng enum.
@@ -58,10 +74,18 @@ public sealed partial class ExportViewModel : ObservableObject
 
     // --- Mức nén ---
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PresetIndex), nameof(IsCustom), nameof(ShowQualitySlider), nameof(ShowReduceColors),
-        nameof(PresetSummary), nameof(ValidationMessage), nameof(HasValidationError), nameof(IsValid))]
-    public partial CompressionPreset Preset { get; set; } = CompressionPreset.Balanced;
+    public CompressionPreset Preset
+    {
+        get => _preset;
+        set
+        {
+            if (SetProperty(ref _preset, value))
+            {
+                OnPropertiesChanged(nameof(PresetIndex), nameof(IsCustom), nameof(ShowQualitySlider), nameof(ShowReduceColors),
+                    nameof(PresetSummary), nameof(ValidationMessage), nameof(HasValidationError), nameof(IsValid));
+            }
+        }
+    }
 
     /// <summary>Giống FormatIndex: ComboBox dùng SelectedIndex, thứ tự item khớp thứ tự enum.</summary>
     public int PresetIndex
@@ -92,28 +116,61 @@ public sealed partial class ExportViewModel : ObservableObject
     // --- Giá trị Tuỳ chỉnh ---
 
     /// <summary>Slider.Value là double, nên property cũng là double.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PresetSummary))]
-    public partial double CustomQuality { get; set; } = 80;
+    public double CustomQuality
+    {
+        get => _customQuality;
+        set
+        {
+            if (SetProperty(ref _customQuality, value)) OnPropertyChanged(nameof(PresetSummary));
+        }
+    }
 
-    /// <summary>NumberBox.Value là double; ô trống cho ra NaN, nghĩa là "giữ nguyên chiều rộng".</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PresetSummary), nameof(ValidationMessage), nameof(HasValidationError), nameof(IsValid))]
-    public partial double CustomMaxWidth { get; set; } = 2048;
+    /// <summary>
+    /// NumberBox.Value là double; ô trống cho ra NaN, nghĩa là "giữ nguyên chiều rộng".
+    /// Lưu ý: NaN != NaN, nhưng EqualityComparer&lt;double&gt; coi hai NaN là bằng nhau,
+    /// nên SetProperty không báo thừa khi ô vẫn trống.
+    /// </summary>
+    public double CustomMaxWidth
+    {
+        get => _customMaxWidth;
+        set
+        {
+            if (SetProperty(ref _customMaxWidth, value))
+            {
+                OnPropertiesChanged(nameof(PresetSummary), nameof(ValidationMessage), nameof(HasValidationError), nameof(IsValid));
+            }
+        }
+    }
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PresetSummary))]
-    public partial bool CustomReduceColors { get; set; }
+    public bool CustomReduceColors
+    {
+        get => _customReduceColors;
+        set
+        {
+            if (SetProperty(ref _customReduceColors, value)) OnPropertyChanged(nameof(PresetSummary));
+        }
+    }
 
     // --- Ghép ảnh (PNG/WebP) ---
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ValidationMessage), nameof(HasValidationError), nameof(IsValid))]
-    public partial double Spacing { get; set; } = 0;
+    public double Spacing
+    {
+        get => _spacing;
+        set
+        {
+            if (SetProperty(ref _spacing, value))
+            {
+                OnPropertiesChanged(nameof(ValidationMessage), nameof(HasValidationError), nameof(IsValid));
+            }
+        }
+    }
 
     /// <summary>Windows.UI.Color để bind thẳng vào ColorPicker. Đổi sang ArgbColor khi tạo ExportOptions.</summary>
-    [ObservableProperty]
-    public partial Color BackgroundColor { get; set; } = Color.FromArgb(255, 255, 255, 255);
+    public Color BackgroundColor
+    {
+        get => _backgroundColor;
+        set => SetProperty(ref _backgroundColor, value);
+    }
 
     // --- Tóm tắt và kiểm tra hợp lệ ---
 
