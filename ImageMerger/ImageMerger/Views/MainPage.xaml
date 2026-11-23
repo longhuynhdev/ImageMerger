@@ -166,13 +166,24 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
-                        <!--  Tay cầm: mở MenuFlyout để di chuyển bằng chuột/bàn phím thay vì kéo  -->
-                        <Button
+                        <!--
+                            Tay cầm. Cố ý dùng Border thay vì Button: Button "bắt" con trỏ ngay khi nhấn
+                            nên ListView không bao giờ nhận được thao tác kéo. Border thì không, nên:
+                            - Nhấn giữ rồi kéo lên/xuống: ListView tự đổi thứ tự (CanReorderItems).
+                            - Bấm (Tapped, chỉ xảy ra khi không kéo): mở menu, xem OnDragHandleTapped.
+                            - Chuột phải: ContextFlyout tự mở cùng menu đó.
+                        -->
+                        <Border
+                            Width="40"
+                            Height="40"
                             VerticalAlignment="Center"
                             AutomationProperties.Name="Di chuyển"
-                            ToolTipService.ToolTip="Di chuyển">
+                            Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                            CornerRadius="{StaticResource ControlCornerRadius}"
+                            Tapped="OnDragHandleTapped"
+                            ToolTipService.ToolTip="Kéo để di chuyển, bấm để mở menu">
                             <FontIcon FontSize="16" Glyph="&#xE76F;" />
-                            <Button.Flyout>
+                            <Border.ContextFlyout>
                                 <MenuFlyout>
                                     <MenuFlyoutItem Command="{x:Bind MoveToTopCommand}" Text="Lên đầu">
                                         <MenuFlyoutItem.Icon>
@@ -195,8 +206,8 @@
                                         </MenuFlyoutItem.Icon>
                                     </MenuFlyoutItem>
                                 </MenuFlyout>
-                            </Button.Flyout>
-                        </Button>
+                            </Border.ContextFlyout>
+                        </Border>
 
                         <Border
                             Grid.Column="1"

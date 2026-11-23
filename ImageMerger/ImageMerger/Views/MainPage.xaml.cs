@@ -1,6 +1,7 @@
 using ImageMerger.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Navigation;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
@@ -68,6 +69,17 @@ public sealed partial class MainPage : Page
         {
             deferral.Complete();
         }
+    }
+
+    /// <summary>
+    /// Bấm vào tay cầm thì mở menu Lên/Xuống. Tapped không được phát ra nếu người dùng đã kéo,
+    /// nên kéo để đổi thứ tự và bấm để mở menu không lẫn vào nhau.
+    /// </summary>
+    private void OnDragHandleTapped(object sender, TappedRoutedEventArgs e)
+    {
+        var handle = (FrameworkElement)sender;
+        handle.ContextFlyout?.ShowAt(handle);
+        e.Handled = true;
     }
 
     /// <summary>Flyout không tự đóng khi bấm nút bên trong, nên đóng nó sau khi xác nhận xoá.</summary>
