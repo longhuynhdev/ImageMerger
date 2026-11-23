@@ -1,28 +1,44 @@
+using System.Runtime.InteropServices;
+using ImageMerger.Services;
+using ImageMerger.ViewModels;
+using ImageMerger.Views;
+using Microsoft.UI;
 using Microsoft.UI.Xaml;
+using Windows.Graphics;
 
-// To learn more about WinUI, the WinUI project structure,
-// and more about our project templates, see: http://aka.ms/winui-project-info.
+namespace ImageMerger;
 
-namespace ImageMerger
+/// <summary>
+/// Cửa sổ chính. Chỉ chứa title bar và một Frame; nội dung nằm trong <see cref="MainPage"/>.
+/// Đây cũng là nơi "lắp ráp" service và ViewModel (composition root), vì chỉ cửa sổ mới có AppWindow.Id.
+/// </summary>
+public sealed partial class MainWindow : Window
 {
-    /// <summary>
-    /// The application window. This hosts a Frame that displays pages. Add your
-    /// UI and logic to MainPage.xaml / MainPage.xaml.cs instead of here so you
-    /// can use Page features such as navigation events and the Loaded lifecycle.
-    /// </summary>
-    public sealed partial class MainWindow : Window
+    private const int DefaultWidthDip = 900;
+    private const int DefaultHeightDip = 720;
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hWnd);
+
+    public MainWindow()
     {
-        public MainWindow()
-        {
-            InitializeComponent();
+        InitializeComponent();
 
-            ExtendsContentIntoTitleBar = true;
-            SetTitleBar(AppTitleBar);
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(AppTitleBar);
 
-            AppWindow.SetIcon("Assets/AppIcon.ico");
+        AppWindow.SetIcon("Assets/AppIcon.ico");
+        ResizeToDefault();
 
-            // Navigate the root frame to the main page on startup.
-            RootFrame.Navigate(typeof(MainPage));
-        }
+        var viewModel = new MainViewModel(new FilePickerService(AppWindow.Id), new ThumbnailService());
+        RootFrame.Navigate(typeof(MainPage), viewModel);
+    }
+
+    /// <summary>AppWindow.Resize nhận pixel vật lý, nên phải nhân với hệ số DPI của màn hình.</summary>
+    private void ResizeToDefault()
+    {
+        IntPtr hwnd = Win32Interop.GetWindowFromWindowId(AppWindow.Id);
+        double scale = GetDpiForWindow(hwnd) / 96.0;
+        AppWindow.Resize(new SizeInt32((int)(DefaultWidthDip * scale), (int)(DefaultHeightDip * scale)));
     }
 }
