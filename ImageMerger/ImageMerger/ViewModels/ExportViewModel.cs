@@ -226,7 +226,7 @@ public sealed class ExportViewModel : BindableBase
         _itemCount == 0 ? "Chưa có ảnh"
         : !IsValid ? "Sửa tuỳ chọn để xem ước tính"
         : _estimate is null ? "Đang ước tính…"
-        : _sourceBytes > 0 ? $"{EstimateRatio:0}% so với ảnh gốc ({FileSizeFormatter.Format(_sourceBytes)})"
+        : _sourceBytes > 0 ? $"{EstimateRatio:0}% so với file gốc ({FileSizeFormatter.Format(_sourceBytes)})"
         : "";
 
     /// <summary>Bật ProgressRing nhỏ cạnh số ước tính (cả trong 300 ms chờ debounce).</summary>
@@ -483,7 +483,7 @@ public sealed class ExportViewModel : BindableBase
         IsExporting = true;
         try
         {
-            await _pdfExporter.ExportAsync(sources, outputPath, options, progress, _exportCts.Token);
+            int pageCount = await _pdfExporter.ExportAsync(sources, outputPath, options, progress, _exportCts.Token);
 
             long size = new FileInfo(outputPath).Length;
             string comparison = estimate is null
@@ -492,11 +492,11 @@ public sealed class ExportViewModel : BindableBase
                   $"(lệch {PercentError(estimate.Bytes, size):+0;-0;0}%) · ";
             ShowResult(
                 InfoBarSeverity.Success,
-                $"Đã lưu {Path.GetFileName(outputPath)} · {sources.Count} trang · {FileSizeFormatter.Format(size)}",
+                $"Đã lưu {Path.GetFileName(outputPath)} · {pageCount} trang · {FileSizeFormatter.Format(size)}",
                 comparison + outputPath,
                 outputPath);
 
-            if (estimate is not null) LogEstimateAccuracy(options, sources.Count, estimate, size);
+            if (estimate is not null) LogEstimateAccuracy(options, pageCount, estimate, size);
         }
         catch (OperationCanceledException)
         {

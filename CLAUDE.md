@@ -77,7 +77,8 @@ Phần lớn công cụ gộp ảnh chỉ có nút "Xuất". Người dùng khô
 | UI | **WinUI 3**, Windows App SDK 1.8+ (Packaged app) |
 | MVVM | Tự viết, **không dùng CommunityToolkit.Mvvm** (theo yêu cầu tech lead): `Helpers/BindableBase.cs` (cài `INotifyPropertyChanged`), `Helpers/RelayCommand.cs` (`RelayCommand`, `AsyncRelayCommand`) |
 | Xử lý ảnh | **Magick.NET** (gói `Magick.NET-Q8-AnyCPU`): đọc PNG/JPG/WebP/HEIC, xoay theo EXIF, resize, nén JPEG để ghi vào PDF |
-| Đọc PDF (đầu vào) | `Windows.Data.Pdf.PdfDocument` (có sẵn trong Windows), render từng trang thành ảnh. *Magick.NET đọc PDF cần Ghostscript nên không dùng cho việc này.* |
+| Đọc PDF (đầu vào) | `Windows.Data.Pdf.PdfDocument` (có sẵn trong Windows): chỉ để render thumbnail. *Magick.NET đọc PDF cần Ghostscript nên không dùng cho việc này.* |
+| Ghi PDF (đầu ra) | **PdfPig** (Apache 2.0): chép nguyên trang từ PDF đầu vào và nhúng ảnh JPEG. Chỉ gọi `Dispose()`, không gọi `Build()` (xem `PdfExporter`). |
 | File Picker | `Microsoft.Windows.Storage.Pickers` (`FileOpenPicker`, `FileSavePicker`) với `AppWindow.Id`. Không dùng `InitializeWithWindow` kiểu cũ. |
 
 Target framework: `net10.0-windows10.0.19041.0`
@@ -112,8 +113,7 @@ ImageMerger/
 │   ├─ ImageLoaderService.cs     // file → danh sách ImageSourceInfo (PDF tách trang)
 │   ├─ ThumbnailService.cs       // tạo thumbnail khoảng 240 px
 │   ├─ Export/
-│   │   ├─ PdfExporter.cs        // mỗi ảnh nén JPEG, một trang
-│   │   └─ JpegPdfWriter.cs      // ghi thẳng JPEG vào file PDF
+│   │   └─ PdfExporter.cs        // PdfPig: ảnh nén JPEG một trang, PDF đầu vào chép nguyên trang
 │   └─ Compression/
 │       ├─ ISizeEstimator.cs
 │       └─ SampleSizeEstimator.cs

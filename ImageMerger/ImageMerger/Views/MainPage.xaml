@@ -71,7 +71,7 @@
                     VerticalAlignment="Center"
                     Orientation="Horizontal"
                     Spacing="8">
-                    <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="Trang PDF" />
+                    <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="Merger" />
                     <TextBlock
                         VerticalAlignment="Center"
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
@@ -199,14 +199,15 @@
                             PointerExited="OnItemPointerExited">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="32" />
+                                <!--  Rộng 48 để vừa khoảng trang của PDF, ví dụ "12–31"  -->
+                                <ColumnDefinition Width="48" />
                                 <ColumnDefinition Width="72" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
 
                             <!--
-                                Tay cầm. Cố ý dùng Border thay vì Button: Button "bắt" con trỏ ngay khi nhấn
+                                Tay nắm. Cố ý dùng Border thay vì Button: Button "bắt" con trỏ ngay khi nhấn
                                 nên ListView không bao giờ nhận được thao tác kéo. Border thì không, nên:
                                 - Nhấn giữ rồi kéo lên/xuống: ListView tự đổi thứ tự (CanReorderItems).
                                 - Bấm (Tapped, chỉ xảy ra khi không kéo): mở menu, xem OnDragHandleTapped.
@@ -224,7 +225,7 @@
                                 <FontIcon
                                     FontSize="16"
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                    Glyph="&#xE76F;" />
+                                    Glyph="&#xE700;" />
                                 <Border.ContextFlyout>
                                     <MenuFlyout>
                                         <MenuFlyoutItem Command="{x:Bind MoveToTopCommand}" Text="Lên đầu">
@@ -256,7 +257,7 @@
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Center"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Text="{x:Bind PageNumber, Mode=OneWay}" />
+                                Text="{x:Bind PageNumberText, Mode=OneWay}" />
 
                             <Border
                                 Grid.Column="2"
