@@ -34,7 +34,7 @@ public sealed class MainViewModel : BindableBase
 
         // Kích thước có thể chưa biết (thumbnail chưa xong), exporter và bộ ước tính không cần vì chúng tự đọc lại ảnh gốc.
         Export = new ExportViewModel(filePickerService, pdfExporter, sizeEstimator, () => Items
-            .Select(item => item.Source ?? new ImageSourceInfo(item.Path, null, 0, 0))
+            .SelectMany(item => item.GetSources())
             .ToList());
 
         AddImagesCommand = new AsyncRelayCommand(AddImagesAsync);
@@ -121,7 +121,7 @@ public sealed class MainViewModel : BindableBase
         var newItems = paths
             .Where(SupportedFormats.IsSupportedInput)
             .OrderBy(Path.GetFileName, NaturalStringComparer.Instance)
-            .Select(path => new ImageItemViewModel(path, MoveItem, RemoveItem))
+            .Select(path => new ImageItemViewModel(path, MoveItem, RemoveItem, OnItemPagesChanged))
             .ToList();
 
         // Thêm ngay vào danh sách để người dùng thấy, thumbnail sẽ hiện dần.
@@ -150,9 +150,6 @@ public sealed class MainViewModel : BindableBase
             {
                 if (!Items.Contains(item)) continue; // đã bị xoá trong lúc chờ
                 await item.LoadThumbnailAsync(_thumbnailService, CancellationToken.None);
-
-                // Số trang của PDF chỉ biết sau khi đọc file: đánh số lại các dòng phía sau.
-                if (item.IsPdf) UpdatePageNumbers();
             }
         }
         finally
@@ -190,6 +187,16 @@ public sealed class MainViewModel : BindableBase
 
     private void RemoveItem(ImageItemViewModel item) => Items.Remove(item);
 
+    /// <summary>
+    /// Callback khi một file PDF vừa đọc xong (biết số trang) hoặc người dùng sửa ô chọn trang:
+    /// đánh số lại các dòng, và bật/tắt nút Xuất theo việc còn ô chọn trang nào sai không.
+    /// </summary>
+    private void OnItemPagesChanged(ImageItemViewModel item)
+    {
+        UpdatePageNumbers();
+        Export.SetPageRangeErrors(Items.Any(i => i.HasPageRangeError));
+    }
+
     private void SortByName() =>
         ApplyOrder(Items.OrderBy(i => i.DisplayName, NaturalStringComparer.Instance));
 
@@ -219,6 +226,8 @@ public sealed class MainViewModel : BindableBase
         SortByNameCommand.NotifyCanExecuteChanged();
         SortByDateCommand.NotifyCanExecuteChanged();
         ClearAllCommand.NotifyCanExecuteChanged();
+        // Xoá một item đang nhập sai thì nút Xuất phải bật lại.
+        Export.SetPageRangeErrors(Items.Any(i => i.HasPageRangeError));
         Export.SetItems(Items.Count, Items.FirstOrDefault()?.Path, Items.Sum(i => i.FileSizeBytes));
 
         // Cập nhật cờ đầu/cuối để menu Lên/Xuống của từng item bật/tắt đúng.

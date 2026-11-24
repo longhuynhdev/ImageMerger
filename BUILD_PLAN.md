@@ -147,7 +147,15 @@ Bối cảnh chung của dự án nằm trong `CLAUDE.md`.
   - Xuất: trang PDF được **chép nguyên** (giữ chữ, bôi đen được), không nén. Ảnh vẫn nén JPEG như trước.
   - Ước tính dung lượng: item PDF tính bằng dung lượng file gốc, không đổi theo mức nén.
   - Ghi file: chỉ gọi `PdfDocumentBuilder.Dispose()`, **không gọi `Build()`**. `Build()` đọc lại toàn bộ file vào `byte[]`: đo thử file 153 MB thì RAM lên đỉnh 679 MB, còn chỉ `Dispose()` thì đứng yên khoảng 31 MB.
-- [ ] **PDF đầu vào, Bước 2:** bấm item PDF để mở rộng (`Expander`) ra danh sách trang. Chỉ xoá và sắp xếp trang **trong cùng file**; xoá hết trang thì xoá luôn item. Thumbnail từng trang chỉ render khi người dùng mở nhóm.
+- [x] **PDF đầu vào: chọn trang bằng ô nhập khoảng trang** (đã chốt, thay cho Bước 2 cũ). ⚠️ **Code xong, build được, CHƯA chạy thử và chưa commit.** Session sau: chạy app, thử các trường hợp ở dưới rồi mới commit.
+  - Mỗi item PDF có ô "Trang" ở dòng phụ, cú pháp giống hộp thoại In: `1-3`, `1, 2, 5`, `1-3, 7`. Để trống = tất cả. Placeholder: `Tất cả (vd: 1-3, 5)`.
+  - **Quy tắc: xuất đúng những gì gõ, theo đúng thứ tự gõ.** `5, 1-3` → trang 5, 1, 2, 3. `1, 1` → trang 1 hai lần. Không loại trùng, không sắp xếp lại: đơn giản nhất cả về code lẫn cách giải thích. Gõ nhầm thì người dùng thấy ngay qua cột vị trí và tổng số trang.
+  - Ô nhập **không** đặt ở cột vị trí (`1–8`): cột đó là vị trí trong file xuất, còn ô nhập là trang của file nguồn. Cột vị trí tự cập nhật theo số trang đã chọn.
+  - Kiểm tra input, báo lỗi tại chỗ bằng dòng chữ đỏ (giống ô "Tên file"), không dùng dialog: chỉ nhận số, dấu phẩy, `-`/`–`, khoảng trắng; số trong 1..số trang của file; khoảng `a-b` cần a ≤ b. Còn item nhập sai thì nút Xuất PDF bị tắt. PDF chưa đọc xong thì ô nhập bị khoá.
+  - Phân tích cú pháp ở `Helpers/PageRangeParser.cs` (thuần C#, không phụ thuộc WinUI).
+  - Ước tính dung lượng ≈ dung lượng file × số trang chọn / tổng số trang (gần đúng, vì font và tài nguyên dùng chung giữa các trang).
+- [ ] *(Stretch, chỉ làm nếu cần)* **Bước 2 cũ: mở rộng item PDF ra danh sách trang** (`Expander`), xoá và sắp xếp từng trang có thumbnail. Ô nhập khoảng trang đã làm được xoá, sắp xếp và lấy một đoạn; Bước 2 chỉ thêm việc **nhìn thấy** trang. Đây là phần UI khó nhất (ListView kéo thả lồng trong ListView kéo thả), nên chỉ làm nếu dùng thực tế mà hay phải mở file ra để tra số trang. Phương án nhẹ hơn: tooltip xem trước trang.
+- *(Ngoài phạm vi)* **Tách một file thành nhiều file.** Khi cần thì dùng trình duyệt (In → chọn trang → Lưu dưới dạng PDF) hoặc PDFsam Basic. Nếu sau này cần thường xuyên, ý tưởng là chèn "vạch cắt" giữa các item, mỗi đoạn xuất thành một file riêng (`ten_1.pdf`, `ten_2.pdf`…).
 - [ ] ⏸️ **TẠM HOÃN, chưa code: nén trang PDF scan** (chờ tôi quyết định).
   > **Hướng đang cân nhắc (chưa chốt):** giữ được chữ (bôi đen, copy) của PDF đầu vào. Chỉ nén trang scan.
   >

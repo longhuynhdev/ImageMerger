@@ -34,6 +34,7 @@ public sealed class ExportViewModel : BindableBase
     private double _customQuality = 85;
     private double _customMaxWidth = 2048;
     private int _itemCount;
+    private bool _hasPageRangeErrors;
     private long _sourceBytes;
     private string _fileName = "";
 
@@ -79,7 +80,7 @@ public sealed class ExportViewModel : BindableBase
         ];
 
         ExportCommand = new AsyncRelayCommand(
-            ExportAsync, () => _itemCount > 0 && IsValid && !HasFileNameError && !IsExporting);
+            ExportAsync, () => _itemCount > 0 && IsValid && !_hasPageRangeErrors && !HasFileNameError && !IsExporting);
         CancelCommand = new RelayCommand(() => _exportCts?.Cancel(), () => IsExporting);
         OpenResultCommand = new RelayCommand(OpenResult, () => CanOpenResult);
     }
@@ -225,6 +226,7 @@ public sealed class ExportViewModel : BindableBase
     public string CompareText =>
         _itemCount == 0 ? "Chưa có ảnh"
         : !IsValid ? "Sửa tuỳ chọn để xem ước tính"
+        : _hasPageRangeErrors ? "Sửa ô chọn trang để xem ước tính"
         : _estimate is null ? "Đang ước tính…"
         : _sourceBytes > 0 ? $"{EstimateRatio:0}% so với file gốc ({FileSizeFormatter.Format(_sourceBytes)})"
         : "";
@@ -349,6 +351,19 @@ public sealed class ExportViewModel : BindableBase
     }
 
     /// <summary>
+    /// MainViewModel gọi khi ô chọn trang của một file PDF đổi, hoặc khi danh sách đổi.
+    /// Còn ô nào sai thì tắt nút Xuất và không ước tính. Lựa chọn trang đổi thì dung lượng cũng đổi, nên tính lại.
+    /// </summary>
+    /// <param name="hasErrors">Có ít nhất một file PDF đang nhập sai ô chọn trang.</param>
+    public void SetPageRangeErrors(bool hasErrors)
+    {
+        _hasPageRangeErrors = hasErrors;
+        OnPropertyChanged(nameof(CompareText));
+        ExportCommand.NotifyCanExecuteChanged();
+        RequestEstimate();
+    }
+
+    /// <summary>
     /// Xin tính lại dung lượng ước tính. Gọi bao nhiêu lần cũng được: lần gọi mới huỷ lần trước,
     /// và việc tính chỉ bắt đầu sau <see cref="EstimateDebounce"/> không có thay đổi nào nữa (debounce).
     /// </summary>
@@ -358,7 +373,7 @@ public sealed class ExportViewModel : BindableBase
         // Lần chạy nào tự Dispose CTS của mình trong finally.
         _estimateCts?.Cancel();
 
-        if (_itemCount == 0 || !IsValid)
+        if (_itemCount == 0 || !IsValid || _hasPageRangeErrors)
         {
             _estimateCts = null;
             IsEstimating = false;
