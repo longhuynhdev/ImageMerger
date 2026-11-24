@@ -60,21 +60,7 @@ public sealed class PdfExporter
     private static EncodedPage EncodePage(ImageSourceInfo source, ExportOptions options)
     {
         using MagickImage image = ExportImageLoader.Load(source, options.MaxWidth);
-
-        // JPEG không có kênh trong suốt: phủ nền trắng thay vì để vùng trong suốt thành đen.
-        if (image.HasAlpha)
-        {
-            image.BackgroundColor = MagickColors.White;
-            image.Alpha(AlphaAction.Remove);
-        }
-
-        // PDF ở đây chỉ khai báo RGB hoặc Gray, nên đưa ảnh CMYK... về sRGB.
-        if (image.ColorSpace is not ColorSpace.sRGB and not ColorSpace.Gray)
-        {
-            image.ColorSpace = ColorSpace.sRGB;
-        }
-
-        image.Strip(); // bỏ EXIF/metadata: ảnh đã được xoay đúng, không cần nữa
+        ExportImageLoader.PrepareForJpeg(image);
         image.Quality = (uint)options.Quality;
         byte[] jpeg = image.ToByteArray(MagickFormat.Jpeg);
 

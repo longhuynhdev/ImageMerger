@@ -2,6 +2,7 @@ using System.Diagnostics;
 using ImageMerger.Helpers;
 using ImageMerger.Models;
 using ImageMerger.Services;
+using ImageMerger.Services.Compression;
 using ImageMerger.Services.Export;
 using Microsoft.UI.Xaml.Controls;
 
@@ -23,13 +24,24 @@ public sealed class ExportViewModel : BindableBase
 
     private readonly IFilePickerService _filePickerService;
     private readonly PdfExporter _pdfExporter;
+    private readonly ISizeEstimator _sizeEstimator;
     private readonly Func<IReadOnlyList<ImageSourceInfo>> _getSources;
+
+    /// <summary>Chờ người dùng ngừng kéo slider / gõ số bao lâu thì mới tính.</summary>
+    private static readonly TimeSpan EstimateDebounce = TimeSpan.FromMilliseconds(300);
 
     private CompressionPreset _preset = CompressionPreset.Balanced;
     private double _customQuality = 85;
     private double _customMaxWidth = 2048;
     private int _itemCount;
+    private long _sourceBytes;
     private string _fileName = "";
+
+    private SizeEstimate? _estimate;
+    private bool _isEstimating;
+
+    /// <summary>Huỷ lần ước tính đang chờ/đang chạy. Mỗi lần đổi tuỳ chọn tạo một cái mới.</summary>
+    private CancellationTokenSource? _estimateCts;
     private string _defaultFileName = FallbackFileName();
 
     private bool _isExporting;
@@ -49,10 +61,12 @@ public sealed class ExportViewModel : BindableBase
     public ExportViewModel(
         IFilePickerService filePickerService,
         PdfExporter pdfExporter,
+        ISizeEstimator sizeEstimator,
         Func<IReadOnlyList<ImageSourceInfo>> getSources)
     {
         _filePickerService = filePickerService;
         _pdfExporter = pdfExporter;
+        _sizeEstimator = sizeEstimator;
         _getSources = getSources;
 
         // Thứ tự khớp enum CompressionPreset, nên SelectedPresetIndex dùng được làm chỉ số.
@@ -84,6 +98,7 @@ public sealed class ExportViewModel : BindableBase
                 OnPropertiesChanged(nameof(SelectedPresetIndex), nameof(IsCustom),
                     nameof(ValidationMessage), nameof(HasValidationError), nameof(IsValid));
                 ExportCommand.NotifyCanExecuteChanged();
+                RequestEstimate();
             }
         }
     }
@@ -114,7 +129,11 @@ public sealed class ExportViewModel : BindableBase
     public double CustomQuality
     {
         get => _customQuality;
-        set => SetProperty(ref _customQuality, value);
+        set
+        {
+            // Slider báo giá trị liên tục khi kéo; debounce trong RequestEstimate gom lại thành một lần tính.
+            if (SetProperty(ref _customQuality, value)) RequestEstimate();
+        }
     }
 
     /// <summary>
@@ -131,6 +150,7 @@ public sealed class ExportViewModel : BindableBase
             {
                 OnPropertiesChanged(nameof(ValidationMessage), nameof(HasValidationError), nameof(IsValid));
                 ExportCommand.NotifyCanExecuteChanged();
+                RequestEstimate();
             }
         }
     }
@@ -196,19 +216,31 @@ public sealed class ExportViewModel : BindableBase
     public bool HasFileNameError => FileNameError.Length > 0;
 
     // --- Dung lượng ước tính ---
-    // Chưa có bộ ước tính (Phase 6), nên các property dưới đây đang giữ giá trị "chưa có".
-    // Phase 6 chỉ cần gán chúng, View đã bind sẵn.
+    // Các property dưới đây đều tính từ _estimate; RequestEstimate/RunEstimateAsync cập nhật nó.
 
-    public string EstimatedSizeText => "≈ — MB";
+    /// <summary>Ví dụ "≈ 4.2 MB". Trong lúc tính lại vẫn giữ số cũ (ProgressRing bên cạnh báo đang tính).</summary>
+    public string EstimatedSizeText => FormatEstimate(_estimate);
 
-    public string CompareText => "Ước tính dung lượng: Phase 6";
+    /// <summary>Dòng chú thích dưới số ước tính, ví dụ "35% so với ảnh gốc (48.3 MB)".</summary>
+    public string CompareText =>
+        _itemCount == 0 ? "Chưa có ảnh"
+        : !IsValid ? "Sửa tuỳ chọn để xem ước tính"
+        : _estimate is null ? "Đang ước tính…"
+        : _sourceBytes > 0 ? $"{EstimateRatio:0}% so với ảnh gốc ({FileSizeFormatter.Format(_sourceBytes)})"
+        : "";
 
-    public bool IsEstimating => false;
+    /// <summary>Bật ProgressRing nhỏ cạnh số ước tính (cả trong 300 ms chờ debounce).</summary>
+    public bool IsEstimating
+    {
+        get => _isEstimating;
+        private set => SetProperty(ref _isEstimating, value);
+    }
 
-    public bool HasEstimate => false;
+    public bool HasEstimate => _estimate is not null;
 
     /// <summary>Tỉ lệ dung lượng ước tính so với tổng dung lượng ảnh gốc, 0–100, cho ProgressBar trong flyout.</summary>
-    public double EstimateRatio => 0;
+    public double EstimateRatio =>
+        _estimate is null || _sourceBytes <= 0 ? 0 : Math.Min(100, 100.0 * _estimate.Bytes / _sourceBytes);
 
     // --- Đang xuất ---
 
@@ -291,10 +323,12 @@ public sealed class ExportViewModel : BindableBase
     /// </summary>
     /// <param name="count">Số ảnh hiện có.</param>
     /// <param name="firstItemPath">Đường dẫn ảnh đầu tiên, <c>null</c> nếu danh sách trống.</param>
-    public void SetItems(int count, string? firstItemPath)
+    /// <param name="sourceBytes">Tổng dung lượng các file ảnh gốc, để so sánh với dung lượng ước tính.</param>
+    public void SetItems(int count, string? firstItemPath, long sourceBytes)
     {
         bool wasEmpty = _itemCount == 0;
         _itemCount = count;
+        _sourceBytes = sourceBytes;
 
         if (count == 0)
         {
@@ -309,7 +343,113 @@ public sealed class ExportViewModel : BindableBase
 
         OnPropertiesChanged(nameof(FileNameError), nameof(HasFileNameError));
         ExportCommand.NotifyCanExecuteChanged();
+
+        // Sắp xếp lại cũng gọi vào đây. Tính lại vẫn rẻ vì bản mẫu và bpp đã được cache.
+        RequestEstimate();
     }
+
+    /// <summary>
+    /// Xin tính lại dung lượng ước tính. Gọi bao nhiêu lần cũng được: lần gọi mới huỷ lần trước,
+    /// và việc tính chỉ bắt đầu sau <see cref="EstimateDebounce"/> không có thay đổi nào nữa (debounce).
+    /// </summary>
+    private void RequestEstimate()
+    {
+        // Không Dispose CTS cũ ở đây: lần chạy cũ có thể vẫn đang dùng token của nó.
+        // Lần chạy nào tự Dispose CTS của mình trong finally.
+        _estimateCts?.Cancel();
+
+        if (_itemCount == 0 || !IsValid)
+        {
+            _estimateCts = null;
+            IsEstimating = false;
+            SetEstimate(null);
+            foreach (PresetOptionViewModel option in Presets) option.EstimatedSizeText = PresetOptionViewModel.NoEstimateText;
+            return;
+        }
+
+        var cts = new CancellationTokenSource();
+        _estimateCts = cts;
+        IsEstimating = true;
+
+        // Không await: setter của property không thể async. RunEstimateAsync tự bắt mọi lỗi.
+        _ = RunEstimateAsync(cts);
+    }
+
+    /// <summary>
+    /// Chờ debounce rồi ước tính: mức nén đang chọn trước (số chính ở thanh đáy), sau đó các preset còn lại cho flyout.
+    ///
+    /// Hàm này chạy trên UI thread. Việc nặng nằm trong <c>_sizeEstimator.EstimateAsync</c> (Task.Run, luồng nền);
+    /// sau mỗi <c>await</c>, SynchronizationContext của WinUI đưa code quay lại UI thread, nên gán property ở đây
+    /// là an toàn mà không cần DispatcherQueue.TryEnqueue.
+    /// </summary>
+    private async Task RunEstimateAsync(CancellationTokenSource cts)
+    {
+        CancellationToken token = cts.Token;
+        try
+        {
+            // Task.Delay nhận token: bị huỷ trong lúc chờ thì ném OperationCanceledException ngay.
+            await Task.Delay(EstimateDebounce, token);
+
+            // Chụp danh sách và tuỳ chọn tại thời điểm bắt đầu tính.
+            IReadOnlyList<ImageSourceInfo> sources = _getSources();
+            ExportOptions current = ToOptions();
+
+            SizeEstimate currentEstimate = await _sizeEstimator.EstimateAsync(sources, current, token);
+            // Có thể lần tính này vừa xong đúng lúc bị huỷ: kiểm tra lại để không ghi đè kết quả của lần mới hơn.
+            token.ThrowIfCancellationRequested();
+            SetEstimate(currentEstimate);
+
+            for (int i = 0; i < Presets.Count; i++)
+            {
+                var preset = (CompressionPreset)i;
+                SizeEstimate? estimate;
+                if (preset == current.Preset)
+                {
+                    estimate = currentEstimate; // vừa tính xong ở trên
+                }
+                else if (preset == CompressionPreset.Custom)
+                {
+                    estimate = null; // Tuỳ chỉnh chỉ có số khi đang chọn
+                }
+                else
+                {
+                    estimate = await _sizeEstimator.EstimateAsync(sources, OptionsFor(preset, PresetSettings.For(preset)), token);
+                    token.ThrowIfCancellationRequested();
+                }
+
+                Presets[i].EstimatedSizeText = estimate is null ? PresetOptionViewModel.NoEstimateText : FormatEstimate(estimate);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Đã có lần tính mới thay thế, hoặc danh sách trống: không làm gì.
+        }
+        catch (Exception ex)
+        {
+            // Ước tính chỉ là thông tin phụ: lỗi bất ngờ không được làm sập app hay chặn việc xuất.
+            Debug.WriteLine($"[SizeEstimate] Lỗi: {ex}");
+            SetEstimate(null);
+        }
+        finally
+        {
+            // Chỉ lần chạy mới nhất mới được tắt ProgressRing.
+            if (_estimateCts == cts)
+            {
+                _estimateCts = null;
+                IsEstimating = false;
+            }
+            cts.Dispose();
+        }
+    }
+
+    private void SetEstimate(SizeEstimate? estimate)
+    {
+        _estimate = estimate;
+        OnPropertiesChanged(nameof(EstimatedSizeText), nameof(CompareText), nameof(HasEstimate), nameof(EstimateRatio));
+    }
+
+    private static string FormatEstimate(SizeEstimate? estimate) =>
+        estimate is null ? "≈ — MB" : $"≈ {FileSizeFormatter.Format(estimate.Bytes)}";
 
     /// <summary>
     /// Mở FileSavePicker rồi xuất. Mỗi lần xuất tạo một <see cref="CancellationTokenSource"/> mới;
@@ -324,6 +464,9 @@ public sealed class ExportViewModel : BindableBase
 
         // Chụp lại danh sách tại thời điểm bấm Xuất.
         IReadOnlyList<ImageSourceInfo> sources = _getSources();
+
+        // Chỉ so sánh khi số ước tính khớp với tuỳ chọn đang xuất (không đang tính dở).
+        SizeEstimate? estimate = IsEstimating ? null : _estimate;
 
         // Progress<T> tạo trên UI thread sẽ gọi callback trên UI thread,
         // nên exporter báo tiến độ từ luồng nền vẫn cập nhật property an toàn.
@@ -343,11 +486,17 @@ public sealed class ExportViewModel : BindableBase
             await _pdfExporter.ExportAsync(sources, outputPath, options, progress, _exportCts.Token);
 
             long size = new FileInfo(outputPath).Length;
+            string comparison = estimate is null
+                ? ""
+                : $"Ước tính {FormatEstimate(estimate)}, thực tế {FileSizeFormatter.Format(size)} " +
+                  $"(lệch {PercentError(estimate.Bytes, size):+0;-0;0}%) · ";
             ShowResult(
                 InfoBarSeverity.Success,
                 $"Đã lưu {Path.GetFileName(outputPath)} · {sources.Count} trang · {FileSizeFormatter.Format(size)}",
-                $"Ước tính: {EstimatedSizeText} · {outputPath}",
+                comparison + outputPath,
                 outputPath);
+
+            if (estimate is not null) LogEstimateAccuracy(options, sources.Count, estimate, size);
         }
         catch (OperationCanceledException)
         {
@@ -395,16 +544,14 @@ public sealed class ExportViewModel : BindableBase
     }
 
     /// <summary>Gom mọi lựa chọn thành ExportOptions cụ thể cho exporter.</summary>
-    public ExportOptions ToOptions()
+    public ExportOptions ToOptions() => OptionsFor(Preset, CurrentSettings());
+
+    private static ExportOptions OptionsFor(CompressionPreset preset, PresetSettings s) => new()
     {
-        PresetSettings s = CurrentSettings();
-        return new ExportOptions
-        {
-            Preset = Preset,
-            Quality = s.PdfQuality,
-            MaxWidth = s.MaxWidth,
-        };
-    }
+        Preset = preset,
+        Quality = s.PdfQuality,
+        MaxWidth = s.MaxWidth,
+    };
 
     /// <summary>Giá trị của preset đang chọn; với Tuỳ chỉnh thì lấy từ các control.</summary>
     private PresetSettings CurrentSettings()
@@ -420,6 +567,28 @@ public sealed class ExportViewModel : BindableBase
     {
         CustomQuality = settings.PdfQuality;
         CustomMaxWidth = settings.MaxWidth ?? double.NaN;
+    }
+
+    /// <summary>Sai số của ước tính so với thực tế, tính bằng %. Dương = ước tính cao hơn thực tế.</summary>
+    private static double PercentError(long estimated, long actual) =>
+        actual > 0 ? 100.0 * (estimated - actual) / actual : 0;
+
+    /// <summary>
+    /// Ghi cặp ước tính/thực tế ra cửa sổ Output của Visual Studio (chỉ hiện khi chạy Debug).
+    /// Dùng để chọn <c>SampleSizeEstimator.ScaleExponent</c>: xuất khoảng 5 bộ ảnh khác nhau,
+    /// lấy giá trị "k gợi ý" ở giữa các lần đo. k gợi ý là số mũ làm ước tính khớp đúng lần xuất này:
+    /// thực tế ≈ chưa hiệu chỉnh × scale^(-k), suy ra k = -ln(thực tế / chưa hiệu chỉnh) / ln(scale).
+    /// </summary>
+    private static void LogEstimateAccuracy(ExportOptions options, int pageCount, SizeEstimate estimate, long actual)
+    {
+        string suggestedK = estimate.TypicalScale > 1.5
+            ? (-Math.Log((double)actual / estimate.UncorrectedBytes) / Math.Log(estimate.TypicalScale)).ToString("0.000")
+            : "n/a (ảnh gần bằng bản mẫu)";
+
+        Debug.WriteLine(
+            $"[SizeEstimate] q={options.Quality} maxWidth={options.MaxWidth?.ToString() ?? "giữ nguyên"} pages={pageCount} " +
+            $"estimate={estimate.Bytes} actual={actual} error={PercentError(estimate.Bytes, actual):+0.0;-0.0}% " +
+            $"uncorrected={estimate.UncorrectedBytes} scale={estimate.TypicalScale:0.0} k gợi ý={suggestedK}");
     }
 
     private static string FallbackFileName() => $"ImageMerger_{DateTime.Now:yyyy-MM-dd}";

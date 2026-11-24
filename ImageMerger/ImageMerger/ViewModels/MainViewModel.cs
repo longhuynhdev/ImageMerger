@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using ImageMerger.Helpers;
 using ImageMerger.Models;
 using ImageMerger.Services;
+using ImageMerger.Services.Compression;
 using ImageMerger.Services.Export;
 using Microsoft.UI.Xaml.Controls;
 
@@ -22,13 +23,17 @@ public sealed class MainViewModel : BindableBase
     private readonly Queue<ImageItemViewModel> _thumbnailQueue = new();
     private bool _isProcessingThumbnails;
 
-    public MainViewModel(IFilePickerService filePickerService, ThumbnailService thumbnailService, PdfExporter pdfExporter)
+    public MainViewModel(
+        IFilePickerService filePickerService,
+        ThumbnailService thumbnailService,
+        PdfExporter pdfExporter,
+        ISizeEstimator sizeEstimator)
     {
         _filePickerService = filePickerService;
         _thumbnailService = thumbnailService;
 
-        // Kích thước có thể chưa biết (thumbnail chưa xong), exporter không cần vì nó tự đọc lại ảnh gốc.
-        Export = new ExportViewModel(filePickerService, pdfExporter, () => Items
+        // Kích thước có thể chưa biết (thumbnail chưa xong), exporter và bộ ước tính không cần vì chúng tự đọc lại ảnh gốc.
+        Export = new ExportViewModel(filePickerService, pdfExporter, sizeEstimator, () => Items
             .Select(item => item.Source ?? new ImageSourceInfo(item.Path, null, 0, 0))
             .ToList());
 
@@ -211,7 +216,7 @@ public sealed class MainViewModel : BindableBase
         SortByNameCommand.NotifyCanExecuteChanged();
         SortByDateCommand.NotifyCanExecuteChanged();
         ClearAllCommand.NotifyCanExecuteChanged();
-        Export.SetItems(Items.Count, Items.FirstOrDefault()?.Path);
+        Export.SetItems(Items.Count, Items.FirstOrDefault()?.Path, Items.Sum(i => i.FileSizeBytes));
 
         // Đánh số trang và cập nhật cờ đầu/cuối để menu Lên/Xuống của từng item bật/tắt đúng.
         for (int i = 0; i < Items.Count; i++)
