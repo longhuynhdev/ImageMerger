@@ -428,3 +428,6 @@ FodyWeavers.xsd
 # DocFX generated output
 ImageMerger/_site/
 ImageMerger/api/
+
+# Ảnh test sinh ra hoặc tải về (tools/GenerateTestImages.cs, tools/DownloadTestImages.ps1)
+testdata/
