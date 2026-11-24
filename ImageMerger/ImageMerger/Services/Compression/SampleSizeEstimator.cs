@@ -32,8 +32,8 @@ public sealed class SampleSizeEstimator : ISizeEstimator
     /// </summary>
     internal const double ScaleExponent = 0.1;
 
-    /// <summary>Phần chữ của mỗi trang trong JpegPdfWriter: object ảnh, nội dung, trang và 3 dòng xref (đếm thực tế khoảng 470 byte).</summary>
-    private const int PageOverheadBytes = 480;
+    /// <summary>Phần chữ của mỗi trang ảnh do PdfPig ghi: object ảnh, nội dung, trang, xref (đo thực tế khoảng 560 byte).</summary>
+    private const int PageOverheadBytes = 560;
 
     /// <summary>Header, Catalog, Pages, trailer của file PDF.</summary>
     private const int FileOverheadBytes = 200;
@@ -91,6 +91,7 @@ public sealed class SampleSizeEstimator : ISizeEstimator
         };
         Parallel.ForEach(sources, parallelOptions, source =>
         {
+            if (SupportedFormats.IsPdf(source.Path)) return; // PDF không lấy mẫu, xem bước 2
             Sample? sample = GetSample(source);
             sample?.BytesPerPixelByQuality.GetOrAdd(options.Quality, quality => MeasureBytesPerPixel(sample, quality));
         });
@@ -103,6 +104,16 @@ public sealed class SampleSizeEstimator : ISizeEstimator
 
         foreach (ImageSourceInfo source in sources)
         {
+            if (SupportedFormats.IsPdf(source.Path))
+            {
+                // File PDF được chép nguyên trang, không phụ thuộc mức nén: lấy luôn dung lượng file gốc.
+                // Cộng vào cả hai số, nên log "k gợi ý" bị lệch nhẹ khi bộ test có PDF: hiệu chỉnh hệ số bằng bộ chỉ có ảnh.
+                long pdfBytes = PdfFileBytes(source.Path);
+                corrected += pdfBytes;
+                uncorrected += pdfBytes;
+                continue;
+            }
+
             Sample? sample = GetSample(source);
             if (sample is null) continue; // ảnh hỏng: lúc xuất sẽ báo lỗi riêng
 
@@ -188,6 +199,22 @@ public sealed class SampleSizeEstimator : ISizeEstimator
         using var stream = new MemoryStream();
         image.Write(stream, MagickFormat.Jpeg);
         return stream.Length / ((double)sample.Width * sample.Height);
+    }
+
+    /// <summary>
+    /// Dung lượng file PDF nguồn (Bước 1: cả file được chép). Bản chép do PdfPig ghi có thể chênh vài %
+    /// so với file gốc. File không đọc được thì tính 0, lúc xuất sẽ báo lỗi riêng.
+    /// </summary>
+    private static long PdfFileBytes(string path)
+    {
+        try
+        {
+            return new FileInfo(path).Length;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return 0;
+        }
     }
 
     /// <summary>Kích thước ảnh trong PDF: giống ExportImageLoader, chỉ thu nhỏ khi rộng hơn <paramref name="maxWidth"/>.</summary>

@@ -13,7 +13,8 @@ namespace ImageMerger.ViewModels;
 public sealed class ImageItemViewModel : BindableBase
 {
     private readonly long _fileSizeBytes;
-    private int _pageNumber;
+    private int _pageCount = 1;
+    private string _pageNumberText = "";
     private bool _isFirst;
     private bool _isLast;
     private string _sizeText;
@@ -32,6 +33,7 @@ public sealed class ImageItemViewModel : BindableBase
     {
         Path = path;
         DisplayName = System.IO.Path.GetFileName(path);
+        IsPdf = SupportedFormats.IsPdf(path);
 
         var fileInfo = new FileInfo(path);
         _fileSizeBytes = fileInfo.Length;
@@ -53,18 +55,36 @@ public sealed class ImageItemViewModel : BindableBase
 
     public string DisplayName { get; }
 
+    /// <summary>File PDF: cả file là một item, các trang được chép nguyên khi xuất.</summary>
+    public bool IsPdf { get; }
+
+    /// <summary>
+    /// Số trang item này chiếm trong file xuất: ảnh là 1, PDF là số trang của file.
+    /// Với PDF, chỉ biết sau khi tạo xong thumbnail; trước đó tạm tính 1.
+    /// </summary>
+    public int PageCount
+    {
+        get => _pageCount;
+        private set => SetProperty(ref _pageCount, value);
+    }
+
     /// <summary>Dung lượng file gốc, để so sánh với dung lượng PDF ước tính.</summary>
     public long FileSizeBytes => _fileSizeBytes;
 
     /// <summary>Ngày sửa file, dùng cho "Sắp xếp theo ngày".</summary>
     public DateTime LastWriteTime { get; }
 
-    /// <summary>Số trang trong PDF (bắt đầu từ 1). MainViewModel đánh lại số mỗi khi danh sách đổi.</summary>
-    public int PageNumber
+    /// <summary>Vị trí trong file xuất, ví dụ "3" (ảnh) hoặc "3–22" (PDF 20 trang).</summary>
+    public string PageNumberText
     {
-        get => _pageNumber;
-        set => SetProperty(ref _pageNumber, value);
+        get => _pageNumberText;
+        private set => SetProperty(ref _pageNumberText, value);
     }
+
+    /// <summary>MainViewModel gọi mỗi khi danh sách hoặc số trang đổi.</summary>
+    /// <param name="firstPage">Số trang (bắt đầu từ 1) của trang đầu tiên của item này.</param>
+    public void SetFirstPage(int firstPage) =>
+        PageNumberText = PageCount > 1 ? $"{firstPage}–{firstPage + PageCount - 1}" : firstPage.ToString();
 
     /// <summary>
     /// MainViewModel cập nhật hai cờ này mỗi khi danh sách thay đổi.
@@ -141,6 +161,16 @@ public sealed class ImageItemViewModel : BindableBase
     {
         try
         {
+            if (IsPdf)
+            {
+                PdfThumbnailResult pdf = await thumbnailService.CreatePdfThumbnailAsync(
+                    Path, ThumbnailService.DefaultMaxSize, cancellationToken);
+                PageCount = pdf.PageCount;
+                SizeText = $"PDF · {pdf.PageCount} trang · {FileSizeFormatter.Format(_fileSizeBytes)}";
+                Thumbnail = await CreateBitmapAsync(pdf.EncodedPng);
+                return;
+            }
+
             ThumbnailResult result = await Task.Run(
                 () => thumbnailService.CreateThumbnail(Path, ThumbnailService.DefaultMaxSize, cancellationToken),
                 cancellationToken);
@@ -153,9 +183,11 @@ public sealed class ImageItemViewModel : BindableBase
         {
             // Bị huỷ (ví dụ đóng app): không làm gì.
         }
-        catch (Exception ex) when (ex is ImageMagick.MagickException or IOException)
+        catch (Exception ex) when (ex is ImageMagick.MagickException or IOException || IsPdf)
         {
-            SizeText = "Không đọc được ảnh";
+            // Windows.Data.Pdf báo lỗi (PDF có mật khẩu, file hỏng) bằng Exception chung kèm HResult,
+            // nên với PDF bắt mọi lỗi. Lúc xuất, PdfExporter sẽ báo lỗi chi tiết hơn.
+            SizeText = IsPdf ? "Không đọc được file PDF" : "Không đọc được ảnh";
         }
         finally
         {

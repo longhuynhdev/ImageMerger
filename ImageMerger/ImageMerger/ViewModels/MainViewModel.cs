@@ -53,8 +53,8 @@ public sealed class MainViewModel : BindableBase
 
     public bool HasItems => !IsEmpty;
 
-    /// <summary>Ví dụ "12 trang", hiện cạnh tiêu đề danh sách.</summary>
-    public string PageCountText => $"{Items.Count} trang";
+    /// <summary>Ví dụ "12 trang", hiện cạnh tiêu đề danh sách. Một file PDF đóng góp nhiều trang.</summary>
+    public string PageCountText => $"{Items.Sum(i => i.PageCount)} trang";
 
     // --- Thông báo (InfoBar) ---
 
@@ -150,6 +150,9 @@ public sealed class MainViewModel : BindableBase
             {
                 if (!Items.Contains(item)) continue; // đã bị xoá trong lúc chờ
                 await item.LoadThumbnailAsync(_thumbnailService, CancellationToken.None);
+
+                // Số trang của PDF chỉ biết sau khi đọc file: đánh số lại các dòng phía sau.
+                if (item.IsPdf) UpdatePageNumbers();
             }
         }
         finally
@@ -212,19 +215,31 @@ public sealed class MainViewModel : BindableBase
 
     private void OnItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        OnPropertiesChanged(nameof(IsEmpty), nameof(HasItems), nameof(PageCountText));
+        OnPropertiesChanged(nameof(IsEmpty), nameof(HasItems));
         SortByNameCommand.NotifyCanExecuteChanged();
         SortByDateCommand.NotifyCanExecuteChanged();
         ClearAllCommand.NotifyCanExecuteChanged();
         Export.SetItems(Items.Count, Items.FirstOrDefault()?.Path, Items.Sum(i => i.FileSizeBytes));
 
-        // Đánh số trang và cập nhật cờ đầu/cuối để menu Lên/Xuống của từng item bật/tắt đúng.
+        // Cập nhật cờ đầu/cuối để menu Lên/Xuống của từng item bật/tắt đúng.
         for (int i = 0; i < Items.Count; i++)
         {
-            Items[i].PageNumber = i + 1;
             Items[i].IsFirst = i == 0;
             Items[i].IsLast = i == Items.Count - 1;
         }
+        UpdatePageNumbers();
+    }
+
+    /// <summary>Đánh số trang trong file xuất cho từng dòng. Một file PDF chiếm nhiều trang liên tiếp.</summary>
+    private void UpdatePageNumbers()
+    {
+        int nextPage = 1;
+        foreach (ImageItemViewModel item in Items)
+        {
+            item.SetFirstPage(nextPage);
+            nextPage += item.PageCount;
+        }
+        OnPropertyChanged(nameof(PageCountText));
     }
 
     private void ShowStatus(InfoBarSeverity severity, string title, string message)

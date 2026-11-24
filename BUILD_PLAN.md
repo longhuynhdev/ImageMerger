@@ -142,7 +142,41 @@ Bối cảnh chung của dự án nằm trong `CLAUDE.md`.
 **Học được:** `Windows.Data.Pdf`, xử lý lỗi theo từng file.
 
 - [ ] Thêm `.webp .heic .heif` vào bộ lọc picker và vào xử lý kéo thả (Magick.NET đọc trực tiếp).
-- [ ] Thêm `.pdf`: `ImageLoaderService` dùng `PdfDocument` render **từng trang** thành ảnh. Mỗi trang là một item, tên dạng `doc.pdf · trang 3`.
+- [x] **PDF đầu vào, Bước 1: merge giữ nguyên trang** (đã chốt). Dùng **PdfPig** (Apache 2.0) ghi toàn bộ file PDF đầu ra và gỡ `JpegPdfWriter`.
+  - Mỗi file PDF là **một item đã thu gọn** trong danh sách: thumbnail trang 1 (render bằng `Windows.Data.Pdf`), dòng phụ dạng `PDF · 20 trang · 1.2 MB`. Item di chuyển và xoá như một khối.
+  - Xuất: trang PDF được **chép nguyên** (giữ chữ, bôi đen được), không nén. Ảnh vẫn nén JPEG như trước.
+  - Ước tính dung lượng: item PDF tính bằng dung lượng file gốc, không đổi theo mức nén.
+  - Ghi file: chỉ gọi `PdfDocumentBuilder.Dispose()`, **không gọi `Build()`**. `Build()` đọc lại toàn bộ file vào `byte[]`: đo thử file 153 MB thì RAM lên đỉnh 679 MB, còn chỉ `Dispose()` thì đứng yên khoảng 31 MB.
+- [ ] **PDF đầu vào, Bước 2:** bấm item PDF để mở rộng (`Expander`) ra danh sách trang. Chỉ xoá và sắp xếp trang **trong cùng file**; xoá hết trang thì xoá luôn item. Thumbnail từng trang chỉ render khi người dùng mở nhóm.
+- [ ] ⏸️ **TẠM HOÃN, chưa code: nén trang PDF scan** (chờ tôi quyết định).
+  > **Hướng đang cân nhắc (chưa chốt):** giữ được chữ (bôi đen, copy) của PDF đầu vào. Chỉ nén trang scan.
+  >
+  > **Use case:** (1) nhiều loại ảnh → một PDF; (2) nhiều PDF → một PDF; (3) trộn lẫn ảnh và PDF. Coi mọi thứ là **danh sách trang**, mỗi trang có cách xử lý riêng, nên use case 3 tự hoạt động mà không cần dialog hỏi người dùng lúc import.
+  >
+  > **Mức 1 (đề xuất làm trước): phân loại theo từng trang**
+  > | Trang có… | Phân loại | Xử lý |
+  > |---|---|---|
+  > | Ảnh đầu vào (PNG/JPG/HEIC…) | Ảnh | Nén (luồng hiện tại) |
+  > | Chữ thật (lấy ra được ký tự) | Trang chữ | Giữ nguyên |
+  > | Không có chữ, ảnh phủ khoảng ≥ 90% trang | Trang scan | Nén: render thành ảnh, rồi qua luồng JPEG |
+  > | Không có chữ, không có ảnh lớn (vector) | Khác | Giữ nguyên |
+  >
+  > - Quy tắc an toàn: **có chữ thì giữ nguyên**. Nhờ vậy PDF scan đã OCR (có lớp chữ ẩn) không bị mất khả năng bôi đen, đổi lại trang đó không được nén.
+  > - Toàn PDF chữ thì kéo slider nén, dung lượng gần như không đổi. Không chặn, không cảnh báo, nhưng nên hiện một dòng nhỏ như `≈ 3.1 MB · 12 trang giữ nguyên` để người dùng không nghĩ app bị lỗi.
+  > - Render trang scan với **DPI khớp độ phân giải ảnh gốc** trong trang, không dùng DPI cố định.
+  > - **Chỉ thay bằng bản nén nếu bản mới nhỏ hơn**, vì scan đen trắng JBIG2/CCITT vốn đã rất nhỏ.
+  > - Ước tính dung lượng: `Σ(ảnh và trang scan nén, ước tính) + Σ(dung lượng trang giữ nguyên)`. Phần giữ nguyên không đổi theo slider và chỉ đo được gần đúng, vì font và tài nguyên có thể dùng chung giữa các trang.
+  >
+  > **Mức 2 (stretch): nén ảnh bên trong PDF, không render lại trang.** Chỉ thay các ảnh nhúng bằng bản nén, chữ, vector và lớp OCR giữ nguyên, nên không cần phân loại trang. Cách này khó hơn nhiều: phải xử lý nhiều kiểu mã hoá (JPEG, Flate, JBIG2, CCITT, JPX), nhiều hệ màu (RGB, CMYK, Indexed, ICC), SMask, và ảnh dùng chung giữa nhiều trang.
+  >
+  > **Thứ tự làm dự kiến:** PDF đầu vào chỉ "Giữ nguyên" (merge) → phân loại trang và nén trang scan (Mức 1) → Mức 2.
+  >
+  > **Cần chốt trước khi code:**
+  > - [x] Thư viện PDF: đã chọn **PdfPig** (xem Bước 1). PdfPig cũng đọc được chữ và ảnh trong trang, dùng lại được cho bước phân loại.
+  > - [ ] Thí nghiệm nhỏ (ngoài project): độ chính xác khi phân loại trang chữ, scan, scan có OCR trên file thật.
+  > - [ ] Đổi tên project nếu PDF đầu vào trở thành use case chính (tên nên nói về kết quả là PDF gọn nhẹ, không nói về "merge"). Làm thành task riêng, đổi `DisplayName` trước.
+  >
+  > *Phương án cũ, đã cân nhắc và tạm bỏ:* chuyển mọi trang PDF thành ảnh (đơn giản, không cần thư viện, nhưng mất chữ, link và bookmark).
 - [ ] File hỏng hoặc không đọc được: bỏ qua, gom lỗi lại và hiện một `InfoBar` tổng hợp, không dừng cả lô.
 - [ ] Thử với ảnh HEIC từ iPhone và ảnh chụp dọc để kiểm tra xoay EXIF.
 
