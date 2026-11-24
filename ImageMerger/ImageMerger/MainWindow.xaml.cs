@@ -34,7 +34,7 @@ public sealed partial class MainWindow : Window
         var viewModel = new MainViewModel(
             new FilePickerService(AppWindow.Id),
             new ThumbnailService(),
-            (IExporter[])[new PdfExporter(), new PngExporter(), new WebpExporter()]);
+            new PdfExporter());
         RootFrame.Navigate(typeof(MainPage), viewModel);
     }
 

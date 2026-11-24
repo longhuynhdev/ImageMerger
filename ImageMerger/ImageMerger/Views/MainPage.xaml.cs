@@ -92,7 +92,7 @@ public sealed partial class MainPage : Page
         var dialog = new ExportDialog(ViewModel.ExportSettings) { XamlRoot = XamlRoot };
         if (await dialog.ShowAsync() == ContentDialogResult.Primary)
         {
-            await ViewModel.ExportCommand.ExecuteAsync(null);
+            await ViewModel.ExportCommand.ExecuteAsync();
         }
     }
 
