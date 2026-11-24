@@ -7,7 +7,7 @@
 
 ## 1. Mục đích dự án
 
-**ImageMerger** là ứng dụng desktop Windows viết bằng **WinUI 3**. Ứng dụng gộp nhiều ảnh (và các trang PDF) thành **một file duy nhất** dạng PDF, PNG hoặc WebP. Người dùng có thể **chọn mức nén** và **xem trước dung lượng file đầu ra** trước khi xuất.
+**ImageMerger** là ứng dụng desktop Windows viết bằng **WinUI 3**. Ứng dụng gộp nhiều ảnh (và các trang PDF) thành **một file PDF duy nhất**, mỗi ảnh một trang. Người dùng có thể **chọn mức nén** và **xem trước dung lượng file đầu ra** trước khi xuất.
 
 Đây đồng thời là **dự án học WinUI 3** của tôi, nên:
 - Ưu tiên code **dễ đọc, đúng chuẩn MVVM** hơn là code ngắn hoặc "thông minh".
@@ -20,14 +20,13 @@
 1. Thêm ảnh qua **File Picker** (chọn nhiều file) và **kéo thả từ Explorer**.
 2. Hiển thị danh sách ảnh dạng thumbnail. Người dùng **sắp xếp lại** (kéo thả hoặc menu Lên/Xuống) và **xoá** từng ảnh.
 3. Nút **"Thêm ảnh" luôn nằm cuối danh sách** (`ListView.Footer`), để người dùng thêm tiếp liên tục.
-4. **Xuất file**:
-   - **PDF**: mỗi ảnh là một trang.
-   - **PNG / WebP**: ghép thành một ảnh dài (ghép dọc, các ảnh thu phóng về cùng chiều rộng).
+4. **Xuất PDF**: mỗi ảnh là một trang.
 5. **Chọn mức nén và dự đoán dung lượng**. Đây là selling point, xem mục 3.
 
 ### Không làm ở giai đoạn đầu (Non-goals)
 - Chỉnh sửa ảnh (crop, filter, vẽ), OCR.
 - Ghép dạng lưới hoặc bố cục tự do.
+- Xuất ảnh dài PNG/WebP. Đã làm ở Phase 4–5 rồi gỡ để tập trung vào PDF (code cũ ở git tag `before-pdf-only`). PNG/WebP là định dạng một ảnh, ghép dài thì gặp giới hạn 16383 px của WebP và tốn RAM. Nếu cần làm lại (ví dụ gửi qua ứng dụng chat), cân nhắc dùng JPEG.
 - Đồng bộ cloud, đa nền tảng (macOS/Linux).
 
 ---
@@ -38,31 +37,28 @@ Phần lớn công cụ gộp ảnh chỉ có nút "Xuất". Người dùng khô
 
 ### 3.1. Mức nén (presets)
 
-| Preset | WebP | PDF (ảnh nén JPEG bên trong) | PNG | Chiều rộng tối đa |
-|---|---|---|---|---|
-| **Gốc** | Lossless | Quality 95 | Giữ nguyên | Giữ nguyên |
-| **Cân bằng** *(mặc định)* | Quality 80 | Quality 85 | Giữ nguyên | 2048 px |
-| **Nhỏ gọn** | Quality 60 | Quality 70 | Giảm màu (PNG-8) | 1280 px |
-| **Tuỳ chỉnh** | Slider 1–100 | Slider 1–100 | Bật/tắt giảm màu | NumberBox |
-
-**Lưu ý về PNG:** PNG là định dạng **lossless**. Mức nén zlib (0–9) chủ yếu đổi tốc độ lấy dung lượng và chỉ giảm được rất ít. Muốn PNG nhỏ đi đáng kể thì phải **giảm độ phân giải** hoặc **giảm số màu** (quantize). UI cần nói rõ điều này với người dùng.
+| Preset | Quality JPEG (bên trong PDF) | Chiều rộng tối đa |
+|---|---|---|
+| **Gốc** | 95 | Giữ nguyên |
+| **Cân bằng** *(mặc định)* | 85 | 2048 px |
+| **Nhỏ gọn** | 70 | 1280 px |
+| **Tuỳ chỉnh** | Slider 1–100 | NumberBox |
 
 ### 3.2. Dự đoán dung lượng (size estimation)
 
 **Thuật toán (bản 1, lấy mẫu):**
 1. Với mỗi ảnh, tạo một **bản mẫu thu nhỏ** (cạnh dài khoảng 512 px) và cache lại.
-2. Encode bản mẫu vào `MemoryStream` với **đúng định dạng và quality** đang chọn, để đo **số byte trên mỗi pixel** (bytes per pixel).
+2. Encode bản mẫu thành JPEG vào `MemoryStream` với **đúng quality** đang chọn, để đo **số byte trên mỗi pixel** (bytes per pixel).
 3. Ước tính:
    `dung lượng ≈ Σ (bytesPerPixel_i × số pixel đầu ra_i) × hệ số hiệu chỉnh + overhead`
-   - Với PDF, overhead khoảng vài KB mỗi trang.
-   - Với PNG/WebP ghép, ước tính trên **ảnh ghép thu nhỏ** thay vì từng ảnh.
+   - Overhead của PDF khoảng vài KB mỗi trang.
 4. Chạy trên luồng nền, **debounce khoảng 300 ms** khi kéo slider, và **huỷ lần tính trước** bằng `CancellationToken`.
 5. Hiển thị dạng `≈ 4.2 MB`. Sau khi xuất xong, hiển thị **dung lượng thật** bên cạnh để so sánh. Ghi lại sai số để tinh chỉnh hệ số hiệu chỉnh.
 
-**Lưu ý:** ảnh thu nhỏ thường có nhiều chi tiết trên mỗi pixel hơn ảnh gốc, nên tỉ lệ bytes per pixel đo trên mẫu thường **cao hơn thực tế**. Hệ số hiệu chỉnh tồn tại để bù phần này. Hệ số được xác định bằng thực nghiệm và có thể khác nhau theo từng định dạng.
+**Lưu ý:** ảnh thu nhỏ thường có nhiều chi tiết trên mỗi pixel hơn ảnh gốc, nên tỉ lệ bytes per pixel đo trên mẫu thường **cao hơn thực tế**. Hệ số hiệu chỉnh tồn tại để bù phần này. Hệ số được xác định bằng thực nghiệm và có thể khác nhau theo từng mức quality.
 
 **Chỉ tiêu:**
-- Sai số **≤ ±20%** với WebP và PDF.
+- Sai số **≤ ±20%**.
 - Thời gian ước tính **< 1 giây** với 20 ảnh điện thoại.
 - UI không bao giờ bị đơ khi đang ước tính.
 
@@ -80,7 +76,7 @@ Phần lớn công cụ gộp ảnh chỉ có nút "Xuất". Người dùng khô
 | Runtime | **.NET 10** |
 | UI | **WinUI 3**, Windows App SDK 1.8+ (Packaged app) |
 | MVVM | Tự viết, **không dùng CommunityToolkit.Mvvm** (theo yêu cầu tech lead): `Helpers/BindableBase.cs` (cài `INotifyPropertyChanged`), `Helpers/RelayCommand.cs` (`RelayCommand`, `AsyncRelayCommand`) |
-| Xử lý ảnh | **Magick.NET** (gói `Magick.NET-Q8-AnyCPU`): đọc PNG/JPG/WebP/HEIC, xoay theo EXIF, resize, ghép, ghi PNG/WebP/PDF |
+| Xử lý ảnh | **Magick.NET** (gói `Magick.NET-Q8-AnyCPU`): đọc PNG/JPG/WebP/HEIC, xoay theo EXIF, resize, nén JPEG để ghi vào PDF |
 | Đọc PDF (đầu vào) | `Windows.Data.Pdf.PdfDocument` (có sẵn trong Windows), render từng trang thành ảnh. *Magick.NET đọc PDF cần Ghostscript nên không dùng cho việc này.* |
 | File Picker | `Microsoft.Windows.Storage.Pickers` (`FileOpenPicker`, `FileSavePicker`) với `AppWindow.Id`. Không dùng `InitializeWithWindow` kiểu cũ. |
 
@@ -93,7 +89,7 @@ Target framework: `net10.0-windows10.0.19041.0`
 ## 5. Định dạng hỗ trợ
 
 - **Đầu vào:** `.png`, `.jpg`, `.jpeg`, `.webp`, `.heic`, `.heif`, `.pdf` (mỗi trang PDF trở thành một item riêng).
-- **Đầu ra:** `.pdf`, `.png`, `.webp`.
+- **Đầu ra:** `.pdf`.
 - **Giai đoạn MVP**
 	- Đầu vào: `.png`
 	- Đầu ra: `.pdf`
@@ -106,7 +102,7 @@ Target framework: `net10.0-windows10.0.19041.0`
 ImageMerger/
 ├─ Models/
 │   ├─ ImageSourceInfo.cs        // Path, PageIndex?, PixelWidth, PixelHeight
-│   ├─ ExportOptions.cs          // Format, Preset, Quality, MaxWidth, Spacing, Background
+│   ├─ ExportOptions.cs          // Preset, Quality, MaxWidth
 │   └─ CompressionPreset.cs
 ├─ ViewModels/
 │   ├─ MainViewModel.cs          // ObservableCollection<ImageItemViewModel>, các command
@@ -116,10 +112,8 @@ ImageMerger/
 │   ├─ ImageLoaderService.cs     // file → danh sách ImageSourceInfo (PDF tách trang)
 │   ├─ ThumbnailService.cs       // tạo thumbnail khoảng 240 px
 │   ├─ Export/
-│   │   ├─ IExporter.cs
-│   │   ├─ PdfExporter.cs
-│   │   ├─ PngExporter.cs
-│   │   └─ WebpExporter.cs
+│   │   ├─ PdfExporter.cs        // mỗi ảnh nén JPEG, một trang
+│   │   └─ JpegPdfWriter.cs      // ghi thẳng JPEG vào file PDF
 │   └─ Compression/
 │       ├─ ISizeEstimator.cs
 │       └─ SampleSizeEstimator.cs
@@ -153,8 +147,8 @@ ImageMerger/
 
 | Vấn đề | Cách xử lý |
 |---|---|
-| WebP tối đa **16383 px** mỗi chiều | Kiểm tra trước khi xuất. Tự giảm kích thước hoặc báo lỗi rõ ràng và gợi ý dùng PNG. |
-| RAM khi ghép ảnh lớn (20 ảnh 4000×3000 ghép dọc tốn khoảng 1 GB) | Có tuỳ chọn chiều rộng tối đa. Đặt `ResourceLimits` cho Magick.NET. Xử lý tuần tự. |
+| RAM khi xử lý nhiều ảnh lớn | Xử lý tuần tự từng ảnh và `Dispose` ngay. Có tuỳ chọn chiều rộng tối đa. Đặt `ResourceLimits` cho Magick.NET. |
+| Trang PDF quá lớn (Acrobat không mở trang > 200 inch) | `PdfExporter` thu nhỏ kích thước trang về tối đa 14400 pt. |
 | Ảnh điện thoại bị xoay sai | Luôn gọi `AutoOrient()` khi load. |
 | Picker trả file **không theo thứ tự click** | Sau khi chọn, sắp xếp natural sort theo tên. Người dùng tự kéo để chỉnh lại. |
 | HEIC | Magick.NET tự đọc được, không phụ thuộc codec của Windows. |

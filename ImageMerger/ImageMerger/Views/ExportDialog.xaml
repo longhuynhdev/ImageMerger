@@ -8,7 +8,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:helpers="using:ImageMerger.Helpers"
-    Title="Xuất ảnh"
+    Title="Xuất PDF"
     CloseButtonText="Huỷ"
     DefaultButton="Primary"
     IsPrimaryButtonEnabled="{x:Bind ViewModel.IsValid, Mode=OneWay}"
@@ -16,19 +16,6 @@
     Style="{StaticResource DefaultContentDialogStyle}">
 
     <StackPanel MinWidth="420" Spacing="16">
-
-        <!--
-            RadioButtons: nhóm lựa chọn "chọn một", có sẵn điều hướng bằng phím mũi tên.
-            Thứ tự 3 nút phải khớp thứ tự enum ExportFormat (Pdf, Png, Webp).
-        -->
-        <RadioButtons
-            Header="Định dạng"
-            MaxColumns="3"
-            SelectedIndex="{x:Bind ViewModel.FormatIndex, Mode=TwoWay}">
-            <RadioButton Content="PDF" />
-            <RadioButton Content="PNG" />
-            <RadioButton Content="WebP" />
-        </RadioButtons>
 
         <!--  ComboBox: danh sách thả xuống. Thứ tự item khớp enum CompressionPreset.  -->
         <StackPanel Spacing="4">
@@ -47,20 +34,14 @@
                 Text="{x:Bind ViewModel.PresetSummary, Mode=OneWay}" />
         </StackPanel>
 
-        <!--  Slider: kéo để chọn số trong khoảng. Chỉ hiện với Tuỳ chỉnh + PDF/WebP.  -->
+        <!--  Slider: kéo để chọn số trong khoảng. Chỉ hiện với Tuỳ chỉnh.  -->
         <Slider
             Header="Chất lượng"
             Maximum="100"
             Minimum="1"
             StepFrequency="1"
-            Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(ViewModel.ShowQualitySlider), Mode=OneWay}"
+            Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(ViewModel.IsCustom), Mode=OneWay}"
             Value="{x:Bind ViewModel.CustomQuality, Mode=TwoWay}" />
-
-        <!--  ToggleSwitch: công tắc bật/tắt. Chỉ hiện với Tuỳ chỉnh + PNG.  -->
-        <ToggleSwitch
-            Header="Giảm còn 256 màu (PNG-8)"
-            IsOn="{x:Bind ViewModel.CustomReduceColors, Mode=TwoWay}"
-            Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(ViewModel.ShowReduceColors), Mode=OneWay}" />
 
         <!--
             NumberBox: ô nhập số có nút tăng/giảm. Minimum/Maximum tự kẹp giá trị khi người dùng nhập xong.
@@ -75,58 +56,6 @@
             SpinButtonPlacementMode="Compact"
             Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(ViewModel.IsCustom), Mode=OneWay}"
             Value="{x:Bind ViewModel.CustomMaxWidth, Mode=TwoWay}" />
-
-        <!--  InfoBar không đóng được: ghi chú cố định cho người dùng  -->
-        <InfoBar
-            IsClosable="False"
-            IsOpen="{x:Bind ViewModel.IsPng, Mode=OneWay}"
-            Message="PNG không mất dữ liệu nên nén gần như không làm file nhỏ đi. Muốn file nhỏ hơn: giảm chiều rộng tối đa hoặc giảm còn 256 màu (Nhỏ gọn / Tuỳ chỉnh)."
-            Severity="Informational" />
-
-        <InfoBar
-            IsClosable="False"
-            IsOpen="{x:Bind ViewModel.IsWebp, Mode=OneWay}"
-            Message="WebP chỉ hỗ trợ tối đa 16383 px mỗi chiều. Nếu ghép nhiều ảnh, hãy giảm chiều rộng tối đa."
-            Severity="Informational" />
-
-        <!--  Tuỳ chọn ghép: chỉ có nghĩa với PNG/WebP  -->
-        <StackPanel Spacing="16" Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(ViewModel.IsMergedFormat), Mode=OneWay}">
-            <NumberBox
-                Header="Khoảng cách giữa các ảnh (px)"
-                Maximum="500"
-                Minimum="0"
-                SmallChange="4"
-                SpinButtonPlacementMode="Inline"
-                Value="{x:Bind ViewModel.Spacing, Mode=TwoWay}" />
-
-            <StackPanel Spacing="4">
-                <TextBlock Text="Màu nền" />
-                <!--
-                    DropDownButton + Flyout: ColorPicker khá to, nên chỉ hiện khi bấm vào ô màu.
-                    IsAlphaEnabled cho phép nền trong suốt.
-                -->
-                <DropDownButton AutomationProperties.Name="Màu nền">
-                    <Border
-                        Width="48"
-                        Height="20"
-                        BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
-                        BorderThickness="1"
-                        CornerRadius="2">
-                        <Border.Background>
-                            <SolidColorBrush Color="{x:Bind ViewModel.BackgroundColor, Mode=OneWay}" />
-                        </Border.Background>
-                    </Border>
-                    <DropDownButton.Flyout>
-                        <Flyout>
-                            <ColorPicker
-                                IsAlphaEnabled="True"
-                                IsMoreButtonVisible="True"
-                                Color="{x:Bind ViewModel.BackgroundColor, Mode=TwoWay}" />
-                        </Flyout>
-                    </DropDownButton.Flyout>
-                </DropDownButton>
-            </StackPanel>
-        </StackPanel>
 
         <TextBlock
             Foreground="{ThemeResource SystemFillColorCriticalBrush}"

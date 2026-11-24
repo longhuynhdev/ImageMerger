@@ -23,18 +23,17 @@ public sealed class MainViewModel : BindableBase
 
     private readonly IFilePickerService _filePickerService;
     private readonly ThumbnailService _thumbnailService;
-    private readonly IReadOnlyList<IExporter> _exporters;
+    private readonly PdfExporter _pdfExporter;
 
     /// <summary>Các ảnh đang chờ tạo thumbnail. Chỉ truy cập trên UI thread nên không cần lock.</summary>
     private readonly Queue<ImageItemViewModel> _thumbnailQueue = new();
     private bool _isProcessingThumbnails;
 
-    /// <param name="exporters">Mỗi định dạng một exporter (PDF, PNG, WebP).</param>
-    public MainViewModel(IFilePickerService filePickerService, ThumbnailService thumbnailService, IReadOnlyList<IExporter> exporters)
+    public MainViewModel(IFilePickerService filePickerService, ThumbnailService thumbnailService, PdfExporter pdfExporter)
     {
         _filePickerService = filePickerService;
         _thumbnailService = thumbnailService;
-        _exporters = exporters;
+        _pdfExporter = pdfExporter;
 
         AddImagesCommand = new AsyncRelayCommand(AddImagesAsync);
         ExportCommand = new AsyncRelayCommand(ExportAsync, () => HasItems);
@@ -183,7 +182,7 @@ public sealed class MainViewModel : BindableBase
     /// <summary>Nút "Xuất ảnh" mở hộp thoại từ code-behind, nên cần một property để bật/tắt nó.</summary>
     public bool CanExport => HasItems && !IsExporting;
 
-    /// <summary>Ví dụ "Đang xuất WebP…", hiện cạnh thanh tiến độ.</summary>
+    /// <summary>Ví dụ "Đang xuất PDF…", hiện cạnh thanh tiến độ.</summary>
     public string ExportingText
     {
         get => _exportingText;
@@ -205,16 +204,8 @@ public sealed class MainViewModel : BindableBase
     private async Task ExportAsync()
     {
         ExportOptions options = ExportSettings.ToOptions();
-        IExporter exporter = _exporters.Single(e => e.Format == options.Format);
-        string formatName = options.Format switch
-        {
-            ExportFormat.Png => "PNG",
-            ExportFormat.Webp => "WebP",
-            _ => "PDF",
-        };
-
         string? outputPath = await _filePickerService.PickSaveFileAsync(
-            "Ảnh đã gộp", $"Tệp {formatName}", ExportSettings.FileExtension);
+            "Ảnh đã gộp", "Tệp PDF", ExportViewModel.FileExtension);
         if (outputPath is null) return;
 
         // Chụp lại danh sách tại thời điểm bấm Xuất. Kích thước có thể chưa biết (thumbnail chưa xong),
@@ -229,12 +220,12 @@ public sealed class MainViewModel : BindableBase
 
         _exportCts = new CancellationTokenSource();
         IsExporting = true;
-        ExportingText = $"Đang xuất {formatName}…";
+        ExportingText = "Đang xuất PDF…";
         ExportProgress = 0;
         IsStatusOpen = false;
         try
         {
-            await exporter.ExportAsync(sources, outputPath, options, progress, _exportCts.Token);
+            await _pdfExporter.ExportAsync(sources, outputPath, options, progress, _exportCts.Token);
 
             long size = new FileInfo(outputPath).Length;
             ShowStatus(
@@ -245,11 +236,6 @@ public sealed class MainViewModel : BindableBase
         catch (OperationCanceledException)
         {
             ShowStatus(InfoBarSeverity.Informational, "Đã huỷ xuất file", "");
-        }
-        catch (ExportValidationException ex)
-        {
-            // Lỗi biết trước (ví dụ vượt giới hạn WebP): message đã kèm gợi ý cách sửa.
-            ShowStatus(InfoBarSeverity.Warning, $"Không thể xuất {formatName}", ex.Message);
         }
         catch (Exception ex)
         {

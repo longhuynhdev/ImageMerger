@@ -95,6 +95,8 @@ Bối cảnh chung của dự án nằm trong `CLAUDE.md`.
 
 **Xong khi:** xuất được ảnh dài PNG và WebP đúng thứ tự. Trường hợp vượt giới hạn WebP được báo lỗi tử tế, app không crash.
 
+> **Đã gỡ PNG/WebP:** sau Phase 5, app chỉ xuất PDF (lý do xem `CLAUDE.md`, mục Non-goals). `ExportDialog` vẫn giữ để chọn mức nén. Code ghép ảnh nằm ở git tag `before-pdf-only`.
+
 ---
 
 ## Phase 5 — Mức nén (presets)
@@ -109,6 +111,8 @@ Bối cảnh chung của dự án nằm trong `CLAUDE.md`.
 
 **Xong khi:** cùng một bộ ảnh, xuất với 3 preset cho ra 3 file có dung lượng khác nhau rõ rệt.
 
+> **Đã gỡ PNG/WebP:** preset giờ chỉ gồm quality JPEG trong PDF và chiều rộng tối đa. Tuỳ chọn giảm màu PNG-8 đã bỏ.
+
 ---
 
 ## Phase 6 — Dự đoán dung lượng (selling point) ⭐
@@ -120,10 +124,10 @@ Bối cảnh chung của dự án nằm trong `CLAUDE.md`.
 - [ ] `ExportViewModel.EstimatedSizeText`, ví dụ `≈ 4.2 MB`. Hiện `ProgressRing` nhỏ trong lúc tính.
 - [ ] **Debounce 300 ms** khi đổi slider hoặc preset. Huỷ lần tính trước bằng `CancellationToken`.
 - [ ] Sau khi xuất: hiện **dung lượng thật** bên cạnh dung lượng ước tính trong `InfoBar`.
-- [ ] Ghi log (Debug output) các cặp ước tính/thực tế. Thử với khoảng 5 bộ ảnh khác nhau để chọn **hệ số hiệu chỉnh** cho từng định dạng.
+- [ ] Ghi log (Debug output) các cặp ước tính/thực tế. Thử với khoảng 5 bộ ảnh khác nhau để chọn **hệ số hiệu chỉnh**.
 - [ ] (Khuyến khích) Viết unit test cho `SampleSizeEstimator` trong một project test riêng.
 
-**Xong khi:** sai số ≤ ±20% với WebP và PDF, ước tính 20 ảnh mất dưới 1 giây, kéo slider không gây giật UI.
+**Xong khi:** sai số ≤ ±20%, ước tính 20 ảnh mất dưới 1 giây, kéo slider không gây giật UI.
 
 ---
 
@@ -157,7 +161,7 @@ Bối cảnh chung của dự án nằm trong `CLAUDE.md`.
 
 - [ ] Chế độ **dung lượng mục tiêu**: "File ≤ 5 MB", app tự tìm quality bằng binary search.
 - [ ] Xem trước trước/sau khi nén: phóng to một vùng ảnh để so sánh chất lượng.
-- [ ] Ghép ngang, ghép lưới (n cột).
+- [ ] Xuất ảnh dài (JPEG) để gửi qua ứng dụng chat. Có thể dựa trên code ghép ảnh ở tag `before-pdf-only`.
 - [ ] PDF khổ A4 với lề, căn ảnh vừa trang.
 - [ ] Xoay hoặc crop nhanh từng ảnh.
 - [ ] Đa ngôn ngữ (`.resw`): tiếng Việt và tiếng Anh.

@@ -82,15 +82,14 @@ Hiểu được hai luồng dưới đây là hiểu được 80% app.
 ```
 [MainPage.xaml.cs] OnExportClick
       │ new ExportDialog(ViewModel.ExportSettings)  ← việc thuần UI: mở dialog
-      │ người dùng chọn định dạng / preset (binding TwoWay ghi thẳng vào ExportViewModel)
+      │ người dùng chọn preset (binding TwoWay ghi thẳng vào ExportViewModel)
       ▼ bấm "Xuất"
 [MainViewModel]  ExportCommand → ExportAsync()
       │ options = ExportSettings.ToOptions()     ← ViewModel → Model thuần
-      │ exporter = _exporters.Single(e => e.Format == options.Format)
       │ _exportCts = new CancellationTokenSource()
-      │ await exporter.ExportAsync(..., progress, _exportCts.Token)
+      │ await _pdfExporter.ExportAsync(..., progress, _exportCts.Token)
       ▼
-[PdfExporter / PngExporter / WebpExporter]   ← Task.Run, Magick.NET, đọc từng ảnh rồi Dispose
+[PdfExporter]   ← Task.Run, Magick.NET, đọc từng ảnh rồi Dispose
       │ progress.Report(0.4) → Progress<T> chuyển về UI thread → ExportProgress = 40
       ▼
 [MainViewModel]  ShowStatus(...) → InfoBar hiện "Đã xuất 12 ảnh (3.4 MB)"
@@ -396,12 +395,12 @@ Chỉ dùng `async void` cho **event handler** (`OnExportClick`, `OnFilesDrop`),
 | `ListView` | Danh sách cuộn, ảo hoá (chỉ tạo control cho dòng đang hiện) | Danh sách ảnh |
 | `ListView.Footer` | Nội dung luôn nằm sau phần tử cuối | Nút "Thêm ảnh" cuối danh sách |
 | `ContentDialog` | Hộp thoại modal | ExportDialog |
-| `RadioButtons` | Chọn một trong vài lựa chọn | Định dạng PDF/PNG/WebP |
+| `RadioButtons` | Chọn một trong vài lựa chọn | Định dạng PDF/PNG/WebP *(đã gỡ, xem tag `before-pdf-only`)* |
 | `ComboBox` | Danh sách thả xuống | Mức nén |
 | `Slider` | Kéo chọn số | Chất lượng |
-| `NumberBox` | Ô nhập số, ô trống = `NaN` | Chiều rộng tối đa, khoảng cách |
-| `ToggleSwitch` | Công tắc bật/tắt | Giảm màu PNG-8 |
-| `ColorPicker` | Chọn màu | Màu nền |
+| `NumberBox` | Ô nhập số, ô trống = `NaN` | Chiều rộng tối đa |
+| `ToggleSwitch` | Công tắc bật/tắt | Giảm màu PNG-8 *(đã gỡ)* |
+| `ColorPicker` | Chọn màu | Màu nền ảnh ghép *(đã gỡ)* |
 | `TitleBar` + `MicaBackdrop` | Thanh tiêu đề tuỳ biến, nền mờ kiểu Windows 11 | MainWindow |
 
 Một vài điểm cần nhớ:
@@ -497,6 +496,8 @@ if (image.ColorSpace is not ColorSpace.sRGB and not ColorSpace.Gray)
     image.ColorSpace = ColorSpace.sRGB;   // ví dụ ảnh CMYK
 ```
 
+> **Lưu ý:** ba ví dụ dưới đây (ghép ảnh, PNG-8, WebP) là code đã gỡ khỏi app khi chuyển sang chỉ xuất PDF. Code đầy đủ nằm ở git tag `before-pdf-only`. Vẫn giữ ở đây vì kiến thức Magick.NET còn hữu ích.
+
 **Ghép ảnh** (`VerticalMergeExporter`):
 
 ```csharp
@@ -522,17 +523,17 @@ canvas.Write(path, new WebPWriteDefines { Lossless = false });
 
 - **`ResourceLimits.LimitMemory(new Percentage(25))`** (`Services/MagickSetup.cs`): khi vượt 25% RAM, ImageMagick chuyển sang lưu tạm trên đĩa thay vì làm treo máy. Gọi một lần lúc app khởi động.
 - **Xử lý từng ảnh một:** đọc → dùng → Dispose → ảnh tiếp theo. Đó là lý do app *không* dùng `MagickImageCollection.AppendVertically()` hay PDF writer của Magick: cả hai cần mọi ảnh nằm trong RAM cùng lúc. Thay vào đó:
-  - PNG/WebP: tạo canvas đúng kích thước cuối rồi dán từng ảnh.
   - PDF: nén từng ảnh thành JPEG rồi ghi thẳng vào file (`JpegPdfWriter`).
-- **Đọc header trước** (`MagickImageInfo`) để tính bố cục và kiểm tra giới hạn (WebP ≤ 16383 px) trước khi làm việc nặng.
+  - PNG/WebP *(đã gỡ)*: tạo canvas đúng kích thước cuối rồi dán từng ảnh.
+- **Đọc header trước** (`MagickImageInfo`) để biết kích thước ảnh mà không phải decode toàn bộ.
 
 ### 8.7. Quality nghĩa là gì với từng định dạng
 
 | Định dạng | `Quality` |
 |---|---|
 | JPEG (trong PDF) | 1–100, càng cao càng đẹp và càng nặng. 85 là mức cân bằng phổ biến |
-| WebP | 1–100 khi lossy. Đặt `Lossless = true` thì quality chỉ còn ảnh hưởng tốc độ nén |
-| PNG | Lossless, không có "chất lượng". Muốn nhỏ hơn: giảm kích thước hoặc giảm màu (PNG-8) |
+| WebP *(app không còn xuất)* | 1–100 khi lossy. Đặt `Lossless = true` thì quality chỉ còn ảnh hưởng tốc độ nén |
+| PNG *(app không còn xuất)* | Lossless, không có "chất lượng". Muốn nhỏ hơn: giảm kích thước hoặc giảm màu (PNG-8) |
 
 ### 8.8. Magick.NET và threading
 

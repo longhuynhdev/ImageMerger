@@ -6,7 +6,7 @@ namespace ImageMerger.Services.Export;
 /// <summary>
 /// Xuất PDF: mỗi ảnh một trang, kích thước trang theo kích thước ảnh, ảnh nén JPEG bên trong.
 /// </summary>
-public sealed class PdfExporter : IExporter
+public sealed class PdfExporter
 {
     /// <summary>Quy đổi pixel → point theo 96 DPI (màn hình), nên ảnh 1920 px rộng 20 inch.</summary>
     private const double PointsPerPixel = 72.0 / 96.0;
@@ -14,8 +14,10 @@ public sealed class PdfExporter : IExporter
     /// <summary>Acrobat không mở được trang lớn hơn 200 inch (14400 pt), ví dụ ảnh chụp màn hình rất dài.</summary>
     private const double MaxPageSizePoints = 14400;
 
-    public ExportFormat Format => ExportFormat.Pdf;
-
+    /// <summary>
+    /// Gộp các ảnh theo đúng thứ tự trong <paramref name="sources"/> và ghi ra <paramref name="outputPath"/>.
+    /// </summary>
+    /// <param name="progress">Nhận giá trị 0..1 sau mỗi ảnh.</param>
     public Task ExportAsync(
         IReadOnlyList<ImageSourceInfo> sources,
         string outputPath,
