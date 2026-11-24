@@ -25,6 +25,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!--
@@ -250,18 +251,20 @@
                     </Grid>
                 </DataTemplate>
             </ListView.ItemTemplate>
-
-            <!--  Footer: luôn nằm sau item cuối cùng và cuộn cùng danh sách  -->
-            <ListView.Footer>
-                <Button
-                    Margin="0,8,0,0"
-                    Command="{x:Bind ViewModel.AddImagesCommand}">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <SymbolIcon Symbol="Add" />
-                        <TextBlock Text="Thêm ảnh" />
-                    </StackPanel>
-                </Button>
-            </ListView.Footer>
         </ListView>
+
+        <!--
+            Nút Thêm ảnh nằm ở hàng Auto riêng, ngoài ListView, nên không cuộn theo danh sách
+            mà luôn ghim ở đáy cửa sổ.
+        -->
+        <Button
+            Grid.Row="4"
+            Command="{x:Bind ViewModel.AddImagesCommand}"
+            Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(ViewModel.HasItems), Mode=OneWay}">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <SymbolIcon Symbol="Add" />
+                <TextBlock Text="Thêm ảnh" />
+            </StackPanel>
+        </Button>
     </Grid>
 </Page>
