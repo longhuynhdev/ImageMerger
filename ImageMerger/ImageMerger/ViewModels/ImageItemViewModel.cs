@@ -13,6 +13,7 @@ namespace ImageMerger.ViewModels;
 public sealed class ImageItemViewModel : BindableBase
 {
     private readonly long _fileSizeBytes;
+    private int _pageNumber;
     private bool _isFirst;
     private bool _isLast;
     private string _sizeText;
@@ -54,6 +55,13 @@ public sealed class ImageItemViewModel : BindableBase
 
     /// <summary>Ngày sửa file, dùng cho "Sắp xếp theo ngày".</summary>
     public DateTime LastWriteTime { get; }
+
+    /// <summary>Số trang trong PDF (bắt đầu từ 1). MainViewModel đánh lại số mỗi khi danh sách đổi.</summary>
+    public int PageNumber
+    {
+        get => _pageNumber;
+        set => SetProperty(ref _pageNumber, value);
+    }
 
     /// <summary>
     /// MainViewModel cập nhật hai cờ này mỗi khi danh sách thay đổi.
