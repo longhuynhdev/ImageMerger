@@ -15,6 +15,10 @@ public sealed class ImageItemViewModel : BindableBase
     private readonly long _fileSizeBytes;
     private int _pageCount = 1;
     private string _pageNumberText = "";
+    private int _pdfPageCount; // 0 = chưa đọc xong file PDF (hoặc không phải PDF)
+    private string _pageRangeText = "";
+    private string _pageRangeError = "";
+    private IReadOnlyList<int>? _selectedPages; // null = tất cả trang
     private bool _isFirst;
     private bool _isLast;
     private string _sizeText;
@@ -22,14 +26,19 @@ public sealed class ImageItemViewModel : BindableBase
     private bool _isLoading = true;
     private readonly Action<ImageItemViewModel, MoveTarget> _moveCallback;
     private readonly Action<ImageItemViewModel> _removeCallback;
+    private readonly Action<ImageItemViewModel> _pagesChangedCallback;
 
     /// <param name="path">Đường dẫn file ảnh.</param>
     /// <param name="moveCallback">Gọi về MainViewModel để di chuyển item này (item không tự biết vị trí của mình).</param>
     /// <param name="removeCallback">Gọi về MainViewModel để xoá item này khỏi danh sách.</param>
+    /// <param name="pagesChangedCallback">
+    /// Gọi về MainViewModel khi số trang hoặc ô chọn trang của file PDF đổi, để đánh số lại và bật/tắt nút Xuất.
+    /// </param>
     public ImageItemViewModel(
         string path,
         Action<ImageItemViewModel, MoveTarget> moveCallback,
-        Action<ImageItemViewModel> removeCallback)
+        Action<ImageItemViewModel> removeCallback,
+        Action<ImageItemViewModel> pagesChangedCallback)
     {
         Path = path;
         DisplayName = System.IO.Path.GetFileName(path);
@@ -42,6 +51,7 @@ public sealed class ImageItemViewModel : BindableBase
 
         _moveCallback = moveCallback;
         _removeCallback = removeCallback;
+        _pagesChangedCallback = pagesChangedCallback;
 
         // Mỗi command là một object ICommand; XAML bind vào các property command bên dưới.
         MoveToTopCommand = new RelayCommand(() => _moveCallback(this, MoveTarget.Top), () => !IsFirst);
@@ -59,13 +69,72 @@ public sealed class ImageItemViewModel : BindableBase
     public bool IsPdf { get; }
 
     /// <summary>
-    /// Số trang item này chiếm trong file xuất: ảnh là 1, PDF là số trang của file.
+    /// Số trang item này chiếm trong file xuất: ảnh là 1, PDF là số trang đã chọn (mặc định cả file).
     /// Với PDF, chỉ biết sau khi tạo xong thumbnail; trước đó tạm tính 1.
+    /// Khi ô chọn trang đang sai, giữ số của lần nhập đúng gần nhất để cột vị trí không nhảy lung tung.
     /// </summary>
     public int PageCount
     {
         get => _pageCount;
         private set => SetProperty(ref _pageCount, value);
+    }
+
+    // --- Chọn trang (chỉ với PDF) ---
+
+    /// <summary>
+    /// Chữ người dùng gõ vào ô "Trang", ví dụ "1-3, 5". Để trống = tất cả trang.
+    /// Bind với UpdateSourceTrigger=PropertyChanged nên setter chạy sau mỗi phím gõ, lỗi hiện ngay.
+    /// </summary>
+    public string PageRangeText
+    {
+        get => _pageRangeText;
+        set
+        {
+            if (SetProperty(ref _pageRangeText, value)) ApplyPageRange();
+        }
+    }
+
+    /// <summary>Chuỗi rỗng nghĩa là ô chọn trang hợp lệ.</summary>
+    public string PageRangeError
+    {
+        get => _pageRangeError;
+        private set
+        {
+            if (SetProperty(ref _pageRangeError, value)) OnPropertyChanged(nameof(HasPageRangeError));
+        }
+    }
+
+    /// <summary>Hiện dòng chữ đỏ dưới ô chọn trang.</summary>
+    public bool HasPageRangeError => PageRangeError.Length > 0;
+
+    /// <summary>Khoá ô chọn trang cho tới khi đọc xong PDF, vì chưa biết file có bao nhiêu trang để kiểm tra.</summary>
+    public bool IsPageRangeEnabled => _pdfPageCount > 0;
+
+    /// <summary>Kiểm tra ô chọn trang, cập nhật số trang và báo cho MainViewModel.</summary>
+    private void ApplyPageRange()
+    {
+        if (_pdfPageCount == 0) return;
+
+        if (PageRangeParser.TryParse(_pageRangeText, _pdfPageCount, out IReadOnlyList<int>? pages, out string error))
+        {
+            _selectedPages = pages;
+            PageCount = pages?.Count ?? _pdfPageCount;
+        }
+        PageRangeError = error;
+        _pagesChangedCallback(this);
+    }
+
+    /// <summary>
+    /// Nguồn cho exporter và bộ ước tính, theo đúng thứ tự trang trong file xuất.
+    /// PDF để trống ô chọn trang thì trả về một nguồn "cả file" (PageIndex = null), dùng được cả khi chưa đọc xong file.
+    /// </summary>
+    public IEnumerable<ImageSourceInfo> GetSources()
+    {
+        if (!IsPdf) return [Source ?? new ImageSourceInfo(Path, null, 0, 0)];
+
+        int? pdfPageCount = _pdfPageCount > 0 ? _pdfPageCount : null;
+        if (_selectedPages is null) return [new ImageSourceInfo(Path, null, 0, 0, pdfPageCount)];
+        return _selectedPages.Select(index => new ImageSourceInfo(Path, index, 0, 0, pdfPageCount));
     }
 
     /// <summary>Dung lượng file gốc, để so sánh với dung lượng PDF ước tính.</summary>
@@ -165,7 +234,9 @@ public sealed class ImageItemViewModel : BindableBase
             {
                 PdfThumbnailResult pdf = await thumbnailService.CreatePdfThumbnailAsync(
                     Path, ThumbnailService.DefaultMaxSize, cancellationToken);
-                PageCount = pdf.PageCount;
+                _pdfPageCount = pdf.PageCount;
+                OnPropertyChanged(nameof(IsPageRangeEnabled));
+                ApplyPageRange(); // cập nhật PageCount và báo MainViewModel đánh số lại
                 SizeText = $"PDF · {pdf.PageCount} trang · {FileSizeFormatter.Format(_fileSizeBytes)}";
                 Thumbnail = await CreateBitmapAsync(pdf.EncodedPng);
                 return;
