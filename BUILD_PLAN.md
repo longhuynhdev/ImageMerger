@@ -121,15 +121,19 @@ Bối cảnh chung của dự án nằm trong `CLAUDE.md`.
 
 **Học được:** debounce, huỷ tác vụ cũ, cập nhật UI từ luồng nền, đo lường và tinh chỉnh thuật toán.
 
-- [ ] `ISizeEstimator` và `SampleSizeEstimator` theo thuật toán ở `CLAUDE.md` mục 3.2.
-- [ ] Cache bản mẫu thu nhỏ (cạnh dài khoảng 512 px) cho mỗi ảnh. Tạo lại khi danh sách ảnh thay đổi.
-- [ ] `ExportViewModel.EstimatedSizeText`, ví dụ `≈ 4.2 MB`. Hiện `ProgressRing` nhỏ trong lúc tính.
-- [ ] **Debounce 300 ms** khi đổi slider hoặc preset. Huỷ lần tính trước bằng `CancellationToken`.
-- [ ] Sau khi xuất: hiện **dung lượng thật** bên cạnh dung lượng ước tính trong `InfoBar`.
-- [ ] Ghi log (Debug output) các cặp ước tính/thực tế. Thử với khoảng 5 bộ ảnh khác nhau để chọn **hệ số hiệu chỉnh**.
-- [ ] (Khuyến khích) Viết unit test cho `SampleSizeEstimator` trong một project test riêng.
+- [x] `ISizeEstimator` và `SampleSizeEstimator` theo thuật toán ở `CLAUDE.md` mục 3.2.
+- [x] Cache bản mẫu thu nhỏ (cạnh dài khoảng 512 px) cho mỗi ảnh. Tạo lại khi danh sách ảnh thay đổi.
+- [x] `ExportViewModel.EstimatedSizeText`, ví dụ `≈ 4.2 MB`. Hiện `ProgressRing` nhỏ trong lúc tính.
+- [x] **Debounce 300 ms** khi đổi slider hoặc preset. Huỷ lần tính trước bằng `CancellationToken`.
+- [x] Sau khi xuất: hiện **dung lượng thật** bên cạnh dung lượng ước tính trong `InfoBar`.
+- [x] Ghi log (Debug output) các cặp ước tính/thực tế, kèm giá trị "k gợi ý" cho hệ số hiệu chỉnh.
+- [ ] Thử với khoảng 5 bộ ảnh **thật** khác nhau để chọn **hệ số hiệu chỉnh** (`SampleSizeEstimator.ScaleExponent`, đang là giá trị tạm 0.1).
+- [ ] (Khuyến khích) Viết unit test cho `SampleSizeEstimator` trong một project test riêng. *(Cần thêm package test framework, chờ duyệt.)*
 
 **Xong khi:** sai số ≤ ±20%, ước tính 20 ảnh mất dưới 1 giây, kéo slider không gây giật UI.
+
+> **Đo thử (ảnh tổng hợp, 20 ảnh 4032×3024):** lần đầu (tạo bản mẫu) 0,67 s, đổi quality 0,07 s, đổi chiều rộng ≈ 0 s.
+> Sai số chưa đạt: ảnh tổng hợp có nhiễu cho ra khoảng −46%. Ảnh nhiễu không giống ảnh thật, nên phải đo lại bằng ảnh thật.
 
 ---
 

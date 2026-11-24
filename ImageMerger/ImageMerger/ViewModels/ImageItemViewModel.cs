@@ -53,6 +53,9 @@ public sealed class ImageItemViewModel : BindableBase
 
     public string DisplayName { get; }
 
+    /// <summary>Dung lượng file gốc, để so sánh với dung lượng PDF ước tính.</summary>
+    public long FileSizeBytes => _fileSizeBytes;
+
     /// <summary>Ngày sửa file, dùng cho "Sắp xếp theo ngày".</summary>
     public DateTime LastWriteTime { get; }
 

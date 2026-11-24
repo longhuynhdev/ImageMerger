@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using ImageMerger.Services;
+using ImageMerger.Services.Compression;
 using ImageMerger.Services.Export;
 using ImageMerger.ViewModels;
 using ImageMerger.Views;
@@ -35,7 +36,8 @@ public sealed partial class MainWindow : Window
         var viewModel = new MainViewModel(
             new FilePickerService(AppWindow.Id),
             new ThumbnailService(),
-            new PdfExporter());
+            new PdfExporter(),
+            new SampleSizeEstimator());
         RootFrame.Navigate(typeof(MainPage), viewModel);
     }
 

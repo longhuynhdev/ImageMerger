@@ -22,7 +22,7 @@ public sealed class PresetOptionViewModel : BindableBase
 
     public string Description { get; }
 
-    /// <summary>Ví dụ "≈ 4,2 MB". Bộ ước tính (Phase 6) sẽ gán giá trị này.</summary>
+    /// <summary>Ví dụ "≈ 4.2 MB". ExportViewModel gán sau mỗi lần ước tính.</summary>
     public string EstimatedSizeText
     {
         get => _estimatedSizeText;
