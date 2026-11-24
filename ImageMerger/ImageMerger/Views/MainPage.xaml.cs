@@ -83,19 +83,37 @@ public sealed partial class MainPage : Page
     }
 
     /// <summary>
-    /// Mở hộp thoại Xuất (việc thuần UI nên được làm ở code-behind). Nếu người dùng bấm "Xuất",
-    /// giao cho ViewModel làm phần còn lại với tuỳ chọn vừa chọn.
+    /// "Xoá tất cả…" là thao tác phá huỷ nên hỏi lại bằng ContentDialog (việc thuần UI, làm ở code-behind),
+    /// người dùng đồng ý thì mới gọi command của ViewModel.
     /// ContentDialog cần XamlRoot để biết hiện trên cửa sổ nào.
     /// </summary>
-    private async void OnExportClick(object sender, RoutedEventArgs e)
+    private async void OnClearAllClick(object sender, RoutedEventArgs e)
     {
-        var dialog = new ExportDialog(ViewModel.ExportSettings) { XamlRoot = XamlRoot };
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "Xoá tất cả ảnh?",
+            Content = "Tất cả ảnh sẽ bị xoá khỏi danh sách. File gốc trên máy không bị ảnh hưởng.",
+            PrimaryButtonText = "Xoá tất cả",
+            CloseButtonText = "Huỷ",
+            DefaultButton = ContentDialogButton.Close,
+        };
         if (await dialog.ShowAsync() == ContentDialogResult.Primary)
         {
-            await ViewModel.ExportCommand.ExecuteAsync();
+            ViewModel.ClearAllCommand.Execute(null);
         }
     }
 
-    /// <summary>Flyout không tự đóng khi bấm nút bên trong, nên đóng nó sau khi xác nhận xoá.</summary>
-    private void OnConfirmClearAllClick(object sender, RoutedEventArgs e) => ClearAllFlyout.Hide();
+    /// <summary>
+    /// Nút Xoá của mỗi dòng chỉ hiện khi rê chuột lên dòng đó (việc thuần hiển thị).
+    /// FindName tìm phần tử có x:Name trong cùng DataTemplate.
+    /// </summary>
+    private void OnItemPointerEntered(object sender, PointerRoutedEventArgs e) => SetDeleteButtonOpacity(sender, 1);
+
+    private void OnItemPointerExited(object sender, PointerRoutedEventArgs e) => SetDeleteButtonOpacity(sender, 0);
+
+    private static void SetDeleteButtonOpacity(object row, double opacity)
+    {
+        if (((FrameworkElement)row).FindName("DeleteButton") is UIElement button) button.Opacity = opacity;
+    }
 }

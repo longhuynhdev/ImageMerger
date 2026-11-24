@@ -4,6 +4,7 @@ using ImageMerger.Services.Export;
 using ImageMerger.ViewModels;
 using ImageMerger.Views;
 using Microsoft.UI;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Windows.Graphics;
 
@@ -29,7 +30,7 @@ public sealed partial class MainWindow : Window
         SetTitleBar(AppTitleBar);
 
         AppWindow.SetIcon("Assets/AppIcon.ico");
-        ResizeToDefault();
+        ResizeAndCenter();
 
         var viewModel = new MainViewModel(
             new FilePickerService(AppWindow.Id),
@@ -38,11 +39,24 @@ public sealed partial class MainWindow : Window
         RootFrame.Navigate(typeof(MainPage), viewModel);
     }
 
-    /// <summary>AppWindow.Resize nhận pixel vật lý, nên phải nhân với hệ số DPI của màn hình.</summary>
-    private void ResizeToDefault()
+    /// <summary>
+    /// Đặt kích thước mặc định và căn giữa cửa sổ trong vùng làm việc của màn hình.
+    /// AppWindow dùng pixel vật lý, nên kích thước DIP phải nhân với hệ số DPI.
+    /// </summary>
+    private void ResizeAndCenter()
     {
         IntPtr hwnd = Win32Interop.GetWindowFromWindowId(AppWindow.Id);
         double scale = GetDpiForWindow(hwnd) / 96.0;
-        AppWindow.Resize(new SizeInt32((int)(DefaultWidthDip * scale), (int)(DefaultHeightDip * scale)));
+
+        // DisplayArea = một màn hình; WorkArea là phần màn hình không tính taskbar.
+        RectInt32 workArea = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Nearest).WorkArea;
+
+        // Không cho cửa sổ lớn hơn vùng làm việc (ví dụ 720 DIP ở scale 150% = 1080 px, cao hơn màn hình 1080p trừ taskbar).
+        int width = Math.Min((int)(DefaultWidthDip * scale), workArea.Width);
+        int height = Math.Min((int)(DefaultHeightDip * scale), workArea.Height);
+        int x = workArea.X + (workArea.Width - width) / 2;
+        int y = workArea.Y + (workArea.Height - height) / 2;
+
+        AppWindow.MoveAndResize(new RectInt32(x, y, width, height));
     }
 }

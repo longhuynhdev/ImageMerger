@@ -95,7 +95,7 @@ Bối cảnh chung của dự án nằm trong `CLAUDE.md`.
 
 **Xong khi:** xuất được ảnh dài PNG và WebP đúng thứ tự. Trường hợp vượt giới hạn WebP được báo lỗi tử tế, app không crash.
 
-> **Đã gỡ PNG/WebP:** sau Phase 5, app chỉ xuất PDF (lý do xem `CLAUDE.md`, mục Non-goals). `ExportDialog` vẫn giữ để chọn mức nén. Code ghép ảnh nằm ở git tag `before-pdf-only`.
+> **Đã gỡ PNG/WebP:** sau Phase 5, app chỉ xuất PDF (lý do xem `CLAUDE.md`, mục Non-goals). Code ghép ảnh nằm ở git tag `before-pdf-only`.
 
 ---
 
@@ -112,6 +112,8 @@ Bối cảnh chung của dự án nằm trong `CLAUDE.md`.
 **Xong khi:** cùng một bộ ảnh, xuất với 3 preset cho ra 3 file có dung lượng khác nhau rõ rệt.
 
 > **Đã gỡ PNG/WebP:** preset giờ chỉ gồm quality JPEG trong PDF và chiều rộng tối đa. Tuỳ chọn giảm màu PNG-8 đã bỏ.
+
+> **Giao diện mới (nhánh `redesign-export-bar`):** gỡ `ExportDialog` và `CommandBar`. Mức nén, nút Xuất PDF (Ctrl+E), tiến độ và kết quả nằm ở thanh đáy `MainPage`. Ô dung lượng ước tính đã có chỗ trong UI, chờ Phase 6 điền số.
 
 ---
 

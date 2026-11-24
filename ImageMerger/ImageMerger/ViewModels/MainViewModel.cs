@@ -14,16 +14,9 @@ public sealed class MainViewModel : BindableBase
     private string _statusTitle = "";
     private string _statusMessage = "";
     private InfoBarSeverity _statusSeverity;
-    private bool _isExporting;
-    private string _exportingText = "";
-    private double _exportProgress;
-
-    /// <summary>Huỷ lần xuất đang chạy. Chỉ khác null trong lúc đang xuất.</summary>
-    private CancellationTokenSource? _exportCts;
 
     private readonly IFilePickerService _filePickerService;
     private readonly ThumbnailService _thumbnailService;
-    private readonly PdfExporter _pdfExporter;
 
     /// <summary>Các ảnh đang chờ tạo thumbnail. Chỉ truy cập trên UI thread nên không cần lock.</summary>
     private readonly Queue<ImageItemViewModel> _thumbnailQueue = new();
@@ -33,11 +26,13 @@ public sealed class MainViewModel : BindableBase
     {
         _filePickerService = filePickerService;
         _thumbnailService = thumbnailService;
-        _pdfExporter = pdfExporter;
+
+        // Kích thước có thể chưa biết (thumbnail chưa xong), exporter không cần vì nó tự đọc lại ảnh gốc.
+        Export = new ExportViewModel(filePickerService, pdfExporter, () => Items
+            .Select(item => item.Source ?? new ImageSourceInfo(item.Path, null, 0, 0))
+            .ToList());
 
         AddImagesCommand = new AsyncRelayCommand(AddImagesAsync);
-        ExportCommand = new AsyncRelayCommand(ExportAsync, () => HasItems);
-        ExportCancelCommand = new RelayCommand(() => _exportCts?.Cancel(), () => IsExporting);
         SortByNameCommand = new RelayCommand(SortByName, () => HasItems);
         SortByDateCommand = new RelayCommand(SortByDate, () => HasItems);
         ClearAllCommand = new RelayCommand(ClearAll, () => HasItems);
@@ -52,6 +47,9 @@ public sealed class MainViewModel : BindableBase
     public bool IsEmpty => Items.Count == 0;
 
     public bool HasItems => !IsEmpty;
+
+    /// <summary>Ví dụ "12 trang", hiện cạnh tiêu đề danh sách.</summary>
+    public string PageCountText => $"{Items.Count} trang";
 
     // --- Thông báo (InfoBar) ---
 
@@ -84,11 +82,6 @@ public sealed class MainViewModel : BindableBase
     // Các command được tạo trong constructor. AsyncRelayCommand tự chặn bấm lặp trong lúc đang chạy.
 
     public AsyncRelayCommand AddImagesCommand { get; }
-
-    public AsyncRelayCommand ExportCommand { get; }
-
-    /// <summary>Nút "Huỷ" cạnh thanh tiến độ: huỷ <see cref="_exportCts"/> của lần xuất đang chạy.</summary>
-    public RelayCommand ExportCancelCommand { get; }
 
     public RelayCommand SortByNameCommand { get; }
 
@@ -162,93 +155,8 @@ public sealed class MainViewModel : BindableBase
 
     // --- Xuất file ---
 
-    /// <summary>Tuỳ chọn của hộp thoại Xuất. Giữ lại giữa các lần xuất.</summary>
-    public ExportViewModel ExportSettings { get; } = new();
-
-    /// <summary>Khi IsExporting đổi thì CanExport và nút Huỷ cũng đổi theo, nên báo luôn cho chúng.</summary>
-    public bool IsExporting
-    {
-        get => _isExporting;
-        set
-        {
-            if (SetProperty(ref _isExporting, value))
-            {
-                OnPropertyChanged(nameof(CanExport));
-                ExportCancelCommand.NotifyCanExecuteChanged();
-            }
-        }
-    }
-
-    /// <summary>Nút "Xuất ảnh" mở hộp thoại từ code-behind, nên cần một property để bật/tắt nó.</summary>
-    public bool CanExport => HasItems && !IsExporting;
-
-    /// <summary>Ví dụ "Đang xuất PDF…", hiện cạnh thanh tiến độ.</summary>
-    public string ExportingText
-    {
-        get => _exportingText;
-        set => SetProperty(ref _exportingText, value);
-    }
-
-    /// <summary>Tiến độ xuất, 0–100, bind vào ProgressBar.</summary>
-    public double ExportProgress
-    {
-        get => _exportProgress;
-        set => SetProperty(ref _exportProgress, value);
-    }
-
-    /// <summary>
-    /// Được gọi sau khi người dùng bấm "Xuất" trong ExportDialog, dùng tuỳ chọn trong <see cref="ExportSettings"/>.
-    /// Mỗi lần xuất tạo một <see cref="CancellationTokenSource"/> mới; <see cref="ExportCancelCommand"/> gọi
-    /// <c>Cancel()</c> trên nó, và exporter dừng ở lần kiểm tra token kế tiếp.
-    /// </summary>
-    private async Task ExportAsync()
-    {
-        ExportOptions options = ExportSettings.ToOptions();
-        string? outputPath = await _filePickerService.PickSaveFileAsync(
-            "Ảnh đã gộp", "Tệp PDF", ExportViewModel.FileExtension);
-        if (outputPath is null) return;
-
-        // Chụp lại danh sách tại thời điểm bấm Xuất. Kích thước có thể chưa biết (thumbnail chưa xong),
-        // exporter không cần vì nó tự đọc lại ảnh gốc.
-        var sources = Items
-            .Select(item => item.Source ?? new ImageSourceInfo(item.Path, null, 0, 0))
-            .ToList();
-
-        // Progress<T> tạo trên UI thread sẽ gọi callback trên UI thread,
-        // nên exporter báo tiến độ từ luồng nền vẫn cập nhật property an toàn.
-        var progress = new Progress<double>(value => ExportProgress = value * 100);
-
-        _exportCts = new CancellationTokenSource();
-        IsExporting = true;
-        ExportingText = "Đang xuất PDF…";
-        ExportProgress = 0;
-        IsStatusOpen = false;
-        try
-        {
-            await _pdfExporter.ExportAsync(sources, outputPath, options, progress, _exportCts.Token);
-
-            long size = new FileInfo(outputPath).Length;
-            ShowStatus(
-                InfoBarSeverity.Success,
-                $"Đã xuất {sources.Count} ảnh ({FileSizeFormatter.Format(size)})",
-                outputPath);
-        }
-        catch (OperationCanceledException)
-        {
-            ShowStatus(InfoBarSeverity.Informational, "Đã huỷ xuất file", "");
-        }
-        catch (Exception ex)
-        {
-            // Ranh giới với UI: mọi lỗi (file hỏng, ổ đầy, không có quyền ghi...) đều báo cho người dùng.
-            ShowStatus(InfoBarSeverity.Error, "Xuất file thất bại", ex.Message);
-        }
-        finally
-        {
-            _exportCts.Dispose();
-            _exportCts = null;
-            IsExporting = false;
-        }
-    }
+    /// <summary>Thanh xuất PDF ở đáy trang. Tạo một lần và giữ lựa chọn suốt phiên làm việc.</summary>
+    public ExportViewModel Export { get; }
 
     // --- Sắp xếp, xoá ---
 
@@ -299,15 +207,16 @@ public sealed class MainViewModel : BindableBase
 
     private void OnItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        OnPropertiesChanged(nameof(IsEmpty), nameof(HasItems), nameof(CanExport));
+        OnPropertiesChanged(nameof(IsEmpty), nameof(HasItems), nameof(PageCountText));
         SortByNameCommand.NotifyCanExecuteChanged();
         SortByDateCommand.NotifyCanExecuteChanged();
         ClearAllCommand.NotifyCanExecuteChanged();
-        ExportCommand.NotifyCanExecuteChanged();
+        Export.SetItems(Items.Count, Items.FirstOrDefault()?.Path);
 
-        // Cập nhật cờ đầu/cuối để menu Lên/Xuống của từng item bật/tắt đúng.
+        // Đánh số trang và cập nhật cờ đầu/cuối để menu Lên/Xuống của từng item bật/tắt đúng.
         for (int i = 0; i < Items.Count; i++)
         {
+            Items[i].PageNumber = i + 1;
             Items[i].IsFirst = i == 0;
             Items[i].IsLast = i == Items.Count - 1;
         }
