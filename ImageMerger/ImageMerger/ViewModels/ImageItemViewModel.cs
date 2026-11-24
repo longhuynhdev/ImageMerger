@@ -54,10 +54,8 @@ public sealed class ImageItemViewModel : BindableBase
         _pagesChangedCallback = pagesChangedCallback;
 
         // Mỗi command là một object ICommand; XAML bind vào các property command bên dưới.
-        MoveToTopCommand = new RelayCommand(() => _moveCallback(this, MoveTarget.Top), () => !IsFirst);
         MoveUpCommand = new RelayCommand(() => _moveCallback(this, MoveTarget.Up), () => !IsFirst);
         MoveDownCommand = new RelayCommand(() => _moveCallback(this, MoveTarget.Down), () => !IsLast);
-        MoveToBottomCommand = new RelayCommand(() => _moveCallback(this, MoveTarget.Bottom), () => !IsLast);
         RemoveCommand = new RelayCommand(() => _removeCallback(this));
     }
 
@@ -137,13 +135,10 @@ public sealed class ImageItemViewModel : BindableBase
         return _selectedPages.Select(index => new ImageSourceInfo(Path, index, 0, 0, pdfPageCount));
     }
 
-    /// <summary>Dung lượng file gốc, để so sánh với dung lượng PDF ước tính.</summary>
-    public long FileSizeBytes => _fileSizeBytes;
-
     /// <summary>Ngày sửa file, dùng cho "Sắp xếp theo ngày".</summary>
     public DateTime LastWriteTime { get; }
 
-    /// <summary>Vị trí trong file xuất, ví dụ "3" (ảnh) hoặc "3–22" (PDF 20 trang).</summary>
+    /// <summary>Vị trí trong file xuất, ví dụ "Trang 3" (ảnh) hoặc "Trang 3–22" (PDF 20 trang).</summary>
     public string PageNumberText
     {
         get => _pageNumberText;
@@ -153,12 +148,12 @@ public sealed class ImageItemViewModel : BindableBase
     /// <summary>MainViewModel gọi mỗi khi danh sách hoặc số trang đổi.</summary>
     /// <param name="firstPage">Số trang (bắt đầu từ 1) của trang đầu tiên của item này.</param>
     public void SetFirstPage(int firstPage) =>
-        PageNumberText = PageCount > 1 ? $"{firstPage}–{firstPage + PageCount - 1}" : firstPage.ToString();
+        PageNumberText = PageCount > 1 ? $"Trang {firstPage}–{firstPage + PageCount - 1}" : $"Trang {firstPage}";
 
     /// <summary>
     /// MainViewModel cập nhật hai cờ này mỗi khi danh sách thay đổi.
     /// Khi cờ đổi, báo cho các command liên quan kiểm tra lại CanExecute,
-    /// nhờ đó mục menu "Lên 1" tự mờ đi khi ảnh đã ở đầu.
+    /// nhờ đó nút "Lên" của dòng đầu và nút "Xuống" của dòng cuối tự mờ đi.
     /// </summary>
     public bool IsFirst
     {
@@ -167,7 +162,6 @@ public sealed class ImageItemViewModel : BindableBase
         {
             if (SetProperty(ref _isFirst, value))
             {
-                MoveToTopCommand.NotifyCanExecuteChanged();
                 MoveUpCommand.NotifyCanExecuteChanged();
             }
         }
@@ -181,18 +175,13 @@ public sealed class ImageItemViewModel : BindableBase
             if (SetProperty(ref _isLast, value))
             {
                 MoveDownCommand.NotifyCanExecuteChanged();
-                MoveToBottomCommand.NotifyCanExecuteChanged();
             }
         }
     }
 
-    public RelayCommand MoveToTopCommand { get; }
-
     public RelayCommand MoveUpCommand { get; }
 
     public RelayCommand MoveDownCommand { get; }
-
-    public RelayCommand MoveToBottomCommand { get; }
 
     public RelayCommand RemoveCommand { get; }
 
@@ -202,7 +191,7 @@ public sealed class ImageItemViewModel : BindableBase
     // Mỗi property có field riêng; setter gọi SetProperty để raise PropertyChanged,
     // nhờ đó x:Bind Mode=OneWay tự cập nhật UI.
 
-    /// <summary>Ví dụ "4032×3024 · 3.1 MB". Trước khi đọc xong ảnh chỉ có dung lượng.</summary>
+    /// <summary>Ví dụ "Ảnh · 3,1 MB" hoặc "File PDF · 20 trang · 2,3 MB". Trước khi đọc xong file chỉ có dung lượng.</summary>
     public string SizeText
     {
         get => _sizeText;
@@ -237,7 +226,7 @@ public sealed class ImageItemViewModel : BindableBase
                 _pdfPageCount = pdf.PageCount;
                 OnPropertyChanged(nameof(IsPageRangeEnabled));
                 ApplyPageRange(); // cập nhật PageCount và báo MainViewModel đánh số lại
-                SizeText = $"PDF · {pdf.PageCount} trang · {FileSizeFormatter.Format(_fileSizeBytes)}";
+                SizeText = $"File PDF · {pdf.PageCount} trang · {FileSizeFormatter.Format(_fileSizeBytes)}";
                 Thumbnail = await CreateBitmapAsync(pdf.EncodedPng);
                 return;
             }
@@ -247,7 +236,7 @@ public sealed class ImageItemViewModel : BindableBase
                 cancellationToken);
 
             Source = new ImageSourceInfo(Path, null, result.PixelWidth, result.PixelHeight);
-            SizeText = $"{result.PixelWidth}×{result.PixelHeight} · {FileSizeFormatter.Format(_fileSizeBytes)}";
+            SizeText = $"Ảnh · {FileSizeFormatter.Format(_fileSizeBytes)}";
             Thumbnail = await CreateBitmapAsync(result.EncodedPng);
         }
         catch (OperationCanceledException)

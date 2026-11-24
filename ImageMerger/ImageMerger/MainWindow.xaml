@@ -18,7 +18,10 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <TitleBar x:Name="AppTitleBar" Title="ImageMerger">
+        <TitleBar
+            x:Name="AppTitleBar"
+            Title="ImageMerger"
+            Subtitle="Gộp ảnh và file PDF thành một file PDF">
             <TitleBar.IconSource>
                 <ImageIconSource ImageSource="Assets/AppIcon.ico" />
             </TitleBar.IconSource>

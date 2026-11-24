@@ -17,7 +17,7 @@ namespace ImageMerger;
 /// </summary>
 public sealed partial class MainWindow : Window
 {
-    private const int DefaultWidthDip = 900;
+    private const int DefaultWidthDip = 1100;
     private const int DefaultHeightDip = 720;
 
     [DllImport("user32.dll")]

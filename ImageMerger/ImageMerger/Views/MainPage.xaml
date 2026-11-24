@@ -1,4 +1,13 @@
 <?xml version="1.0" encoding="utf-8" ?>
+<!--
+    Giao diện 3 bước cho người không rành công nghệ:
+    1. Thêm ảnh hoặc file PDF   2. Kiểm tra thứ tự trang   3. Lưu thành file PDF.
+    Nguyên tắc: chữ to (16), nút cao (44), không có menu ẩn, nút nào cũng có chữ.
+
+    FontSize="16" trên Page: TextBlock trong trang kế thừa cỡ chữ này.
+    Các control (Button, TextBox, RadioButton) tự đặt FontSize trong style mặc định nên không kế thừa,
+    vì vậy có thêm implicit style bên dưới.
+-->
 <Page
     x:Class="ImageMerger.Views.MainPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -7,34 +16,118 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:helpers="using:ImageMerger.Helpers"
     xmlns:vm="using:ImageMerger.ViewModels"
+    FontSize="16"
     mc:Ignorable="d">
+
+    <Page.Resources>
+        <!--
+            Implicit style: Style không có x:Key áp dụng cho MỌI control đúng kiểu TargetType trong trang.
+            BasedOn giữ nguyên giao diện Fluent mặc định, chỉ đổi cỡ chữ và chiều cao tối thiểu.
+            Nút có Style riêng (AccentButtonStyle) không nhận implicit style, nên đặt cỡ chữ trực tiếp trên nút đó.
+        -->
+        <Style BasedOn="{StaticResource DefaultButtonStyle}" TargetType="Button">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="MinHeight" Value="44" />
+            <Setter Property="Padding" Value="14,6" />
+        </Style>
+        <Style BasedOn="{StaticResource DefaultTextBoxStyle}" TargetType="TextBox">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="MinHeight" Value="44" />
+        </Style>
+        <Style BasedOn="{StaticResource DefaultRadioButtonStyle}" TargetType="RadioButton">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="MinHeight" Value="44" />
+        </Style>
+
+        <!--  Tiêu đề bước: vòng tròn có số + chữ to. Ba style dùng chung cho cả 3 bước.  -->
+        <Style x:Key="StepCircleStyle" TargetType="Border">
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="CornerRadius" Value="16" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Background" Value="{ThemeResource AccentFillColorDefaultBrush}" />
+        </Style>
+        <Style x:Key="StepNumberStyle" TargetType="TextBlock">
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="FontSize" Value="17" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
+        </Style>
+        <Style x:Key="StepTitleStyle" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="FontSize" Value="21" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <!--  Chữ phụ (mô tả, hướng dẫn): nhỏ hơn một chút, màu nhạt  -->
+        <Style x:Key="HelpTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        </Style>
+        <Style x:Key="ErrorTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{ThemeResource SystemFillColorCriticalBrush}" />
+        </Style>
+        <Style x:Key="FieldLabelStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="17" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <!--  Nền màu nhấn rất nhạt cho 2 nút lớn ở bước 1  -->
+        <SolidColorBrush
+            x:Key="LightAccentBrush"
+            Opacity="0.1"
+            Color="{ThemeResource SystemAccentColor}" />
+        <Style
+            x:Key="BigAddButtonStyle"
+            BasedOn="{StaticResource DefaultButtonStyle}"
+            TargetType="Button">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="MinHeight" Value="96" />
+            <Setter Property="Padding" Value="16,12" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="BorderThickness" Value="2" />
+            <Setter Property="BorderBrush" Value="{ThemeResource AccentFillColorDefaultBrush}" />
+            <Setter Property="Background" Value="{StaticResource LightAccentBrush}" />
+        </Style>
+    </Page.Resources>
 
     <!--
         AllowDrop + Background (dù là Transparent) để cả trang nhận được file kéo từ Explorer.
-        Không có Background thì vùng trống không "bắt" được chuột/kéo thả.
         Sự kiện DragOver/Drop được đăng ký trong code-behind (xem MainPage.xaml.cs).
 
-        Bố cục: hàng 0 là danh sách trang (chiếm hết chỗ còn lại), hàng 1 là thanh xuất PDF ở đáy.
+        Bố cục: cột trái (*) là bước 1 và 2, cột phải (400) là bước 3.
     -->
     <Grid
         x:Name="RootGrid"
+        Padding="24,8,24,24"
         AllowDrop="True"
-        Background="Transparent">
+        Background="Transparent"
+        ColumnSpacing="24">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition x:Name="RightColumn" Width="400" />
+        </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
+            <RowDefinition x:Name="BottomRow" Height="Auto" />
         </Grid.RowDefinitions>
 
         <!--
             AdaptiveTrigger: VisualStateManager tự chuyển trạng thái theo chiều rộng cửa sổ.
-            Cửa sổ hẹp (dưới 1100 DIP) thì ô "Tên file" xuống hàng thứ hai của thanh xuất,
-            để các nút không bị ép chồng lên nhau. Trạng thái nào có MinWindowWidth lớn nhất mà vẫn thoả thì thắng.
+            Cửa sổ hẹp (dưới 920 DIP) thì cột phải (bước 3) xuống dưới cột trái, mỗi phần chiếm nửa chiều cao.
         -->
         <VisualStateManager.VisualStateGroups>
             <VisualStateGroup>
                 <VisualState x:Name="WideState">
                     <VisualState.StateTriggers>
-                        <AdaptiveTrigger MinWindowWidth="1100" />
+                        <AdaptiveTrigger MinWindowWidth="920" />
                     </VisualState.StateTriggers>
                 </VisualState>
                 <VisualState x:Name="NarrowState">
@@ -42,146 +135,169 @@
                         <AdaptiveTrigger MinWindowWidth="0" />
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
-                        <Setter Target="FileNamePanel.(Grid.Row)" Value="1" />
-                        <Setter Target="FileNamePanel.(Grid.Column)" Value="0" />
-                        <Setter Target="FileNamePanel.(Grid.ColumnSpan)" Value="5" />
+                        <Setter Target="RightColumn.Width" Value="0" />
+                        <Setter Target="BottomRow.Height" Value="*" />
+                        <Setter Target="RootGrid.ColumnSpacing" Value="0" />
+                        <Setter Target="RightPanel.(Grid.Row)" Value="1" />
+                        <Setter Target="RightPanel.(Grid.Column)" Value="0" />
+                        <Setter Target="RightPanel.Margin" Value="0,16,0,0" />
                     </VisualState.Setters>
                 </VisualState>
             </VisualStateGroup>
         </VisualStateManager.VisualStateGroups>
 
-        <!--  ===== Hàng 0: danh sách trang =====  -->
-        <Grid Padding="24,0,24,12" RowSpacing="8">
+        <!--  ===== Cột trái: bước 1 và bước 2 =====  -->
+        <Grid RowSpacing="12">
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <!--  Tiêu đề + các nút thao tác với danh sách  -->
-            <Grid ColumnSpacing="8">
+            <!--  Bước 1  -->
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <Border Style="{StaticResource StepCircleStyle}">
+                    <TextBlock Style="{StaticResource StepNumberStyle}" Text="1" />
+                </Border>
+                <TextBlock Style="{StaticResource StepTitleStyle}" Text="Thêm ảnh hoặc file PDF" />
+            </StackPanel>
+
+            <!--  Hai nút lớn cạnh nhau: thêm ảnh và thêm PDF là hai việc tách bạch  -->
+            <Grid Grid.Row="1" ColumnSpacing="12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <StackPanel
-                    VerticalAlignment="Center"
-                    Orientation="Horizontal"
-                    Spacing="8">
-                    <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="Merger" />
-                    <TextBlock
-                        VerticalAlignment="Center"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                        Text="{x:Bind ViewModel.PageCountText, Mode=OneWay}"
-                        Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(ViewModel.HasItems), Mode=OneWay}" />
-                </StackPanel>
+                <Button Command="{x:Bind ViewModel.AddImagesCommand}" Style="{StaticResource BigAddButtonStyle}">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon
+                            VerticalAlignment="Center"
+                            FontSize="28"
+                            Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                            Glyph="&#xEB9F;" />
+                        <StackPanel Grid.Column="1" Spacing="4">
+                            <TextBlock
+                                FontSize="18"
+                                FontWeight="SemiBold"
+                                Text="Thêm ảnh" />
+                            <TextBlock Style="{StaticResource HelpTextStyle}" Text="Ảnh chụp từ điện thoại, máy ảnh: JPG, PNG" />
+                        </StackPanel>
+                    </Grid>
+                </Button>
 
                 <Button
                     Grid.Column="1"
-                    BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
-                    Command="{x:Bind ViewModel.AddImagesCommand}"
-                    Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <SymbolIcon Symbol="Add" />
-                        <TextBlock Text="Thêm ảnh" />
-                    </StackPanel>
-                </Button>
-
-                <Button
-                    Grid.Column="2"
-                    Command="{x:Bind ViewModel.SortByNameCommand}"
-                    Style="{StaticResource SubtleButtonStyle}">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <SymbolIcon Symbol="Sort" />
-                        <TextBlock Text="Sắp xếp theo tên" />
-                    </StackPanel>
-                </Button>
-
-                <Button
-                    Grid.Column="3"
-                    AutomationProperties.Name="Thêm tuỳ chọn"
-                    Content="&#x22EF;"
-                    Style="{StaticResource SubtleButtonStyle}"
-                    ToolTipService.ToolTip="Thêm tuỳ chọn">
-                    <Button.Flyout>
-                        <MenuFlyout Placement="BottomEdgeAlignedRight">
-                            <MenuFlyoutItem Command="{x:Bind ViewModel.SortByDateCommand}" Text="Sắp xếp theo ngày sửa" />
-                            <MenuFlyoutSeparator />
-                            <!--  Xoá hết là thao tác phá huỷ nên hỏi lại bằng ContentDialog (xem OnClearAllClick)  -->
-                            <MenuFlyoutItem
-                                Click="OnClearAllClick"
-                                IsEnabled="{x:Bind ViewModel.HasItems, Mode=OneWay}"
-                                Text="Xoá tất cả…">
-                                <MenuFlyoutItem.Icon>
-                                    <SymbolIcon Symbol="Delete" />
-                                </MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
-                        </MenuFlyout>
-                    </Button.Flyout>
+                    Command="{x:Bind ViewModel.AddPdfCommand}"
+                    Style="{StaticResource BigAddButtonStyle}">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon
+                            VerticalAlignment="Center"
+                            FontSize="28"
+                            Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                            Glyph="&#xEA90;" />
+                        <StackPanel Grid.Column="1" Spacing="4">
+                            <TextBlock
+                                FontSize="18"
+                                FontWeight="SemiBold"
+                                Text="Thêm file PDF" />
+                            <TextBlock Style="{StaticResource HelpTextStyle}" Text="Mỗi trang trong file PDF sẽ thành một trang riêng" />
+                        </StackPanel>
+                    </Grid>
                 </Button>
             </Grid>
 
-            <!--  InfoBar chung: cảnh báo file không hỗ trợ khi thêm ảnh  -->
+            <TextBlock
+                Grid.Row="2"
+                Style="{StaticResource HelpTextStyle}"
+                Text="Bạn cũng có thể kéo tệp từ thư mục rồi thả vào cửa sổ này." />
+
+            <!--  Cảnh báo khi có file không phải ảnh/PDF. Nút "Đã hiểu" thay cho nút X nhỏ.  -->
             <InfoBar
-                Grid.Row="1"
-                IsOpen="{x:Bind ViewModel.IsStatusOpen, Mode=TwoWay}"
+                Grid.Row="3"
+                IsClosable="False"
+                IsOpen="{x:Bind ViewModel.IsStatusOpen, Mode=OneWay}"
                 Message="{x:Bind ViewModel.StatusMessage, Mode=OneWay}"
                 Severity="{x:Bind ViewModel.StatusSeverity, Mode=OneWay}"
-                Title="{x:Bind ViewModel.StatusTitle, Mode=OneWay}" />
+                Title="{x:Bind ViewModel.StatusTitle, Mode=OneWay}">
+                <InfoBar.ActionButton>
+                    <Button Command="{x:Bind ViewModel.DismissStatusCommand}" Content="Đã hiểu" />
+                </InfoBar.ActionButton>
+            </InfoBar>
 
-            <!--  Danh sách trống: một vùng thả lớn ở giữa  -->
-            <Button
-                Grid.Row="2"
-                MaxWidth="560"
-                MaxHeight="320"
-                Padding="0"
-                HorizontalAlignment="Stretch"
-                VerticalAlignment="Stretch"
-                HorizontalContentAlignment="Stretch"
-                VerticalContentAlignment="Stretch"
-                Background="Transparent"
-                BorderThickness="0"
-                Command="{x:Bind ViewModel.AddImagesCommand}"
+            <!--  Bước 2  -->
+            <StackPanel
+                Grid.Row="4"
+                Margin="0,12,0,0"
+                Orientation="Horizontal"
+                Spacing="12">
+                <Border Style="{StaticResource StepCircleStyle}">
+                    <TextBlock Style="{StaticResource StepNumberStyle}" Text="2" />
+                </Border>
+                <!--  Run: một đoạn chữ trong TextBlock; x:Bind được vào Run.Text để ghép chữ cố định với số trang.  -->
+                <TextBlock Style="{StaticResource StepTitleStyle}">
+                    <Run Text="Kiểm tra thứ tự trang (" /><Run Text="{x:Bind ViewModel.PageCountText, Mode=OneWay}" /><Run Text=")" />
+                </TextBlock>
+            </StackPanel>
+
+            <StackPanel
+                Grid.Row="5"
+                Orientation="Horizontal"
+                Spacing="8">
+                <Button Command="{x:Bind ViewModel.SortByNameCommand}" Content="Sắp xếp theo tên" />
+                <Button Command="{x:Bind ViewModel.SortByDateCommand}" Content="Sắp xếp theo ngày" />
+                <!--  Xoá hết là thao tác phá huỷ nên hỏi lại bằng ContentDialog (xem OnClearAllClick)  -->
+                <Button
+                    Click="OnClearAllClick"
+                    Content="Xoá tất cả"
+                    Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                    IsEnabled="{x:Bind ViewModel.HasItems, Mode=OneWay}" />
+            </StackPanel>
+
+            <!--  Danh sách trống: khung viền nét đứt có lời nhắc  -->
+            <Grid
+                Grid.Row="6"
+                MinHeight="160"
+                VerticalAlignment="Top"
                 Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(ViewModel.IsEmpty), Mode=OneWay}">
-                <Grid>
-                    <Rectangle
-                        RadiusX="8"
-                        RadiusY="8"
-                        Stroke="{ThemeResource ControlStrokeColorSecondaryBrush}"
-                        StrokeDashArray="4,3"
-                        StrokeThickness="2" />
-                    <StackPanel
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        Spacing="12">
-                        <FontIcon
-                            FontSize="48"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                            Glyph="&#xEB9F;" />
-                        <TextBlock
-                            HorizontalAlignment="Center"
-                            Style="{StaticResource SubtitleTextBlockStyle}"
-                            Text="Chưa có ảnh nào" />
-                        <TextBlock
-                            HorizontalAlignment="Center"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                            Text="Bấm để thêm ảnh hoặc kéo thả tệp vào đây" />
-                    </StackPanel>
-                </Grid>
-            </Button>
+                <Rectangle
+                    RadiusX="8"
+                    RadiusY="8"
+                    Stroke="{ThemeResource ControlStrokeColorSecondaryBrush}"
+                    StrokeDashArray="4,3"
+                    StrokeThickness="2" />
+                <TextBlock
+                    Margin="24"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="Chưa có trang nào. Bấm “Thêm ảnh” hoặc “Thêm file PDF” ở bước 1."
+                    TextAlignment="Center"
+                    TextWrapping="Wrap" />
+            </Grid>
 
             <!--
-                CanReorderItems + CanDragItems + AllowDrop: ListView tự xử lý kéo thả để đổi thứ tự.
-                Khi thả, ListView gọi Remove + Insert trên ObservableCollection, nên ViewModel
-                luôn giữ đúng thứ tự mà không cần code thêm.
+                Mỗi dòng có nút "Lên", "Xuống", "Xoá" luôn hiện: không cần biết kéo thả.
+                CanReorderItems vẫn bật để ai quen kéo thả thì vẫn dùng được.
+                Nút trong dòng của ListView hoạt động như nút bình thường; Command của từng nút
+                bind vào command của chính item đó (x:DataType=ImageItemViewModel).
             -->
             <ListView
-                Grid.Row="2"
+                Grid.Row="6"
                 AllowDrop="True"
-                AutomationProperties.Name="Danh sách ảnh"
+                AutomationProperties.Name="Danh sách trang"
                 CanDragItems="True"
                 CanReorderItems="True"
                 ItemsSource="{x:Bind ViewModel.Items}"
@@ -190,80 +306,28 @@
                 <ListView.ItemTemplate>
                     <!--  x:DataType cho x:Bind biết kiểu của từng item để kiểm tra lúc compile  -->
                     <DataTemplate x:DataType="vm:ImageItemViewModel">
-                        <!--  Background Transparent để PointerEntered/Exited bắt được cả vùng trống của dòng  -->
-                        <Grid
-                            Padding="0,6"
-                            Background="Transparent"
-                            ColumnSpacing="12"
-                            PointerEntered="OnItemPointerEntered"
-                            PointerExited="OnItemPointerExited">
+                        <Grid Padding="0,10" ColumnSpacing="16">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <!--  Rộng 48 để vừa khoảng trang của PDF, ví dụ "12–31"  -->
-                                <ColumnDefinition Width="48" />
-                                <ColumnDefinition Width="72" />
+                                <ColumnDefinition Width="88" />
+                                <ColumnDefinition Width="96" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
 
-                            <!--
-                                Tay nắm. Cố ý dùng Border thay vì Button: Button "bắt" con trỏ ngay khi nhấn
-                                nên ListView không bao giờ nhận được thao tác kéo. Border thì không, nên:
-                                - Nhấn giữ rồi kéo lên/xuống: ListView tự đổi thứ tự (CanReorderItems).
-                                - Bấm (Tapped, chỉ xảy ra khi không kéo): mở menu, xem OnDragHandleTapped.
-                                - Chuột phải: ContextFlyout tự mở cùng menu đó.
-                            -->
-                            <Border
-                                Width="24"
-                                Height="40"
-                                VerticalAlignment="Center"
-                                AutomationProperties.Name="Di chuyển"
-                                Background="Transparent"
-                                CornerRadius="{StaticResource ControlCornerRadius}"
-                                Tapped="OnDragHandleTapped"
-                                ToolTipService.ToolTip="Kéo để di chuyển, bấm để mở menu">
-                                <FontIcon
-                                    FontSize="16"
-                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                    Glyph="&#xE700;" />
-                                <Border.ContextFlyout>
-                                    <MenuFlyout>
-                                        <MenuFlyoutItem Command="{x:Bind MoveToTopCommand}" Text="Lên đầu">
-                                            <MenuFlyoutItem.Icon>
-                                                <FontIcon Glyph="&#xEDDB;" />
-                                            </MenuFlyoutItem.Icon>
-                                        </MenuFlyoutItem>
-                                        <MenuFlyoutItem Command="{x:Bind MoveUpCommand}" Text="Lên 1">
-                                            <MenuFlyoutItem.Icon>
-                                                <FontIcon Glyph="&#xE70E;" />
-                                            </MenuFlyoutItem.Icon>
-                                        </MenuFlyoutItem>
-                                        <MenuFlyoutItem Command="{x:Bind MoveDownCommand}" Text="Xuống 1">
-                                            <MenuFlyoutItem.Icon>
-                                                <FontIcon Glyph="&#xE70D;" />
-                                            </MenuFlyoutItem.Icon>
-                                        </MenuFlyoutItem>
-                                        <MenuFlyoutItem Command="{x:Bind MoveToBottomCommand}" Text="Xuống cuối">
-                                            <MenuFlyoutItem.Icon>
-                                                <FontIcon Glyph="&#xEDDC;" />
-                                            </MenuFlyoutItem.Icon>
-                                        </MenuFlyoutItem>
-                                    </MenuFlyout>
-                                </Border.ContextFlyout>
-                            </Border>
-
                             <TextBlock
-                                Grid.Column="1"
-                                HorizontalAlignment="Right"
                                 VerticalAlignment="Center"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Text="{x:Bind PageNumberText, Mode=OneWay}" />
+                                FontWeight="SemiBold"
+                                Text="{x:Bind PageNumberText, Mode=OneWay}"
+                                TextWrapping="Wrap" />
 
                             <Border
-                                Grid.Column="2"
-                                Width="72"
+                                Grid.Column="1"
+                                Width="96"
                                 Height="72"
+                                VerticalAlignment="Center"
                                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1"
                                 CornerRadius="{StaticResource ControlCornerRadius}">
                                 <Grid>
                                     <Image Source="{x:Bind Thumbnail, Mode=OneWay}" Stretch="Uniform" />
@@ -275,315 +339,311 @@
                             </Border>
 
                             <StackPanel
-                                Grid.Column="3"
+                                Grid.Column="2"
                                 VerticalAlignment="Center"
                                 Spacing="2">
-                                <TextBlock
-                                    Style="{StaticResource BodyStrongTextBlockStyle}"
-                                    Text="{x:Bind DisplayName}"
-                                    TextTrimming="CharacterEllipsis" />
-                                <TextBlock
-                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                    Style="{StaticResource CaptionTextBlockStyle}"
-                                    Text="{x:Bind SizeText, Mode=OneWay}" />
+                                <TextBlock Text="{x:Bind DisplayName}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Style="{StaticResource HelpTextStyle}" Text="{x:Bind SizeText, Mode=OneWay}" />
 
                                 <!--
                                     Ô chọn trang, chỉ có ở file PDF. Cú pháp giống hộp thoại In ("1-3, 5"), để trống = tất cả.
                                     Bị khoá (IsEnabled) cho tới khi đọc xong PDF. Lỗi hiện bằng dòng chữ đỏ ngay bên dưới.
                                 -->
                                 <StackPanel
-                                    Margin="0,4,0,0"
-                                    Orientation="Horizontal"
-                                    Spacing="8"
+                                    Margin="0,6,0,0"
+                                    Spacing="4"
                                     Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(IsPdf)}">
-                                    <TextBlock
-                                        VerticalAlignment="Center"
-                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                        Style="{StaticResource CaptionTextBlockStyle}"
-                                        Text="Trang" />
+                                    <TextBlock Style="{StaticResource HelpTextStyle}" Text="Chỉ lấy một số trang (để trống là lấy tất cả):" />
                                     <TextBox
-                                        Width="180"
+                                        MaxWidth="240"
+                                        HorizontalAlignment="Left"
                                         AutomationProperties.Name="Chọn trang"
                                         IsEnabled="{x:Bind IsPageRangeEnabled, Mode=OneWay}"
-                                        PlaceholderText="Tất cả (vd: 1-3, 5)"
+                                        PlaceholderText="Ví dụ: 1-3, 5"
                                         Text="{x:Bind PageRangeText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock
+                                        Style="{StaticResource ErrorTextStyle}"
+                                        Text="{x:Bind PageRangeError, Mode=OneWay}"
+                                        Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(HasPageRangeError), Mode=OneWay}" />
                                 </StackPanel>
-                                <TextBlock
-                                    Foreground="{ThemeResource SystemFillColorCriticalBrush}"
-                                    Style="{StaticResource CaptionTextBlockStyle}"
-                                    Text="{x:Bind PageRangeError, Mode=OneWay}"
-                                    TextWrapping="Wrap"
-                                    Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(HasPageRangeError), Mode=OneWay}" />
                             </StackPanel>
 
-                            <!--  Opacity 0: chỉ hiện khi rê chuột lên dòng (xem OnItemPointerEntered)  -->
-                            <Button
-                                x:Name="DeleteButton"
-                                Grid.Column="4"
+                            <!--  Nút luôn hiện, có chữ. Lên mờ ở dòng đầu, Xuống mờ ở dòng cuối (CanExecute).  -->
+                            <StackPanel
+                                Grid.Column="3"
                                 VerticalAlignment="Center"
-                                AutomationProperties.Name="Xoá ảnh"
-                                Command="{x:Bind RemoveCommand}"
-                                Opacity="0"
-                                Style="{StaticResource SubtleButtonStyle}"
-                                ToolTipService.ToolTip="Xoá khỏi danh sách">
-                                <SymbolIcon Symbol="Delete" />
-                            </Button>
+                                Orientation="Horizontal"
+                                Spacing="6">
+                                <Button Command="{x:Bind MoveUpCommand}">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <FontIcon FontSize="14" Glyph="&#xE74A;" />
+                                        <TextBlock Text="Lên" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Command="{x:Bind MoveDownCommand}">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <FontIcon FontSize="14" Glyph="&#xE74B;" />
+                                        <TextBlock Text="Xuống" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Command="{x:Bind RemoveCommand}">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <FontIcon FontSize="14" Glyph="&#xE74D;" />
+                                        <TextBlock Text="Xoá" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
                         </Grid>
                     </DataTemplate>
                 </ListView.ItemTemplate>
-
-                <!--  Footer luôn nằm sau trang cuối: vùng thả viền nét đứt để thêm tiếp  -->
-                <ListView.Footer>
-                    <Button
-                        Margin="0,8,0,0"
-                        Padding="0"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Stretch"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Command="{x:Bind ViewModel.AddImagesCommand}">
-                        <Grid Height="56">
-                            <Rectangle
-                                RadiusX="6"
-                                RadiusY="6"
-                                Stroke="{ThemeResource ControlStrokeColorSecondaryBrush}"
-                                StrokeDashArray="4,3"
-                                StrokeThickness="1.5" />
-                            <StackPanel
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Center"
-                                Orientation="Horizontal"
-                                Spacing="8">
-                                <SymbolIcon Foreground="{ThemeResource TextFillColorSecondaryBrush}" Symbol="Add" />
-                                <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="Thêm ảnh hoặc kéo thả tệp vào đây" />
-                            </StackPanel>
-                        </Grid>
-                    </Button>
-                </ListView.Footer>
             </ListView>
         </Grid>
 
-        <!--  ===== Hàng 1: thanh xuất PDF =====  -->
+        <!--  ===== Cột phải: bước 3 =====  -->
         <Border
-            Grid.Row="1"
+            x:Name="RightPanel"
+            Grid.Column="1"
+            Padding="20"
             Background="{ThemeResource LayerFillColorDefaultBrush}"
             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-            BorderThickness="0,1,0,0">
-            <StackPanel Padding="24,12" Spacing="12">
+            BorderThickness="1"
+            CornerRadius="8">
+            <Grid RowSpacing="16">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
 
-                <!--  Kết quả xuất: dung lượng thật so với ước tính, kèm nút Mở file  -->
-                <InfoBar
-                    IsOpen="{x:Bind ViewModel.Export.HasResult, Mode=TwoWay}"
-                    Message="{x:Bind ViewModel.Export.ResultMessage, Mode=OneWay}"
-                    Severity="{x:Bind ViewModel.Export.ResultSeverity, Mode=OneWay}"
-                    Title="{x:Bind ViewModel.Export.ResultTitle, Mode=OneWay}">
-                    <InfoBar.ActionButton>
-                        <Button
-                            Command="{x:Bind ViewModel.Export.OpenResultCommand}"
-                            Content="Mở file"
-                            Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(ViewModel.Export.CanOpenResult), Mode=OneWay}" />
-                    </InfoBar.ActionButton>
-                </InfoBar>
-
-                <!--  Tuỳ chỉnh: chỉ hiện khi chọn "Tuỳ chỉnh"  -->
-                <StackPanel Spacing="4" Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(ViewModel.Export.IsCustom), Mode=OneWay}">
-                    <Grid ColumnSpacing="24">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <Slider
-                            Header="Chất lượng JPEG"
-                            Maximum="100"
-                            Minimum="1"
-                            StepFrequency="1"
-                            Value="{x:Bind ViewModel.Export.CustomQuality, Mode=TwoWay}" />
-                        <!--  Để trống thì Value = NaN, ViewModel hiểu là "giữ nguyên chiều rộng".  -->
-                        <NumberBox
-                            Grid.Column="1"
-                            MinWidth="200"
-                            Header="Chiều rộng tối đa (px)"
-                            Maximum="20000"
-                            Minimum="64"
-                            PlaceholderText="Để trống: giữ nguyên"
-                            SmallChange="128"
-                            SpinButtonPlacementMode="Compact"
-                            Value="{x:Bind ViewModel.Export.CustomMaxWidth, Mode=TwoWay}" />
-                    </Grid>
-                    <TextBlock
-                        Foreground="{ThemeResource SystemFillColorCriticalBrush}"
-                        Text="{x:Bind ViewModel.Export.ValidationMessage, Mode=OneWay}"
-                        TextWrapping="Wrap"
-                        Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(ViewModel.Export.HasValidationError), Mode=OneWay}" />
-                </StackPanel>
-
-                <!--
-                    Một hàng: Mức nén | Tên file | dung lượng ước tính | Xuất PDF.
-                    Hàng thứ hai chỉ dùng khi cửa sổ hẹp (xem NarrowState ở đầu trang).
-                -->
-                <Grid ColumnSpacing="16" RowSpacing="8">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-
-                    <TextBlock
-                        VerticalAlignment="Center"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                        Style="{StaticResource CaptionTextBlockStyle}"
-                        Text="Mức nén" />
-
-                    <!--  Thứ tự item khớp enum CompressionPreset  -->
-                    <RadioButtons
-                        Grid.Column="1"
-                        VerticalAlignment="Center"
-                        MaxColumns="4"
-                        SelectedIndex="{x:Bind ViewModel.Export.SelectedPresetIndex, Mode=TwoWay}">
-                        <x:String>Gốc</x:String>
-                        <x:String>Cân bằng</x:String>
-                        <x:String>Nhỏ gọn</x:String>
-                        <x:String>Tuỳ chỉnh</x:String>
-                    </RadioButtons>
-
-                    <!--
-                        Tên file. UpdateSourceTrigger=PropertyChanged: đẩy giá trị về ViewModel sau mỗi phím gõ
-                        (mặc định TextBox chỉ đẩy khi mất focus), nên lỗi ký tự không hợp lệ hiện ngay.
-                    -->
-                    <StackPanel
-                        x:Name="FileNamePanel"
-                        Grid.Column="2"
-                        VerticalAlignment="Center"
-                        Spacing="2">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock
-                                VerticalAlignment="Center"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Style="{StaticResource CaptionTextBlockStyle}"
-                                Text="Tên file" />
-                            <TextBox
-                                Width="200"
-                                AutomationProperties.Name="Tên file"
-                                PlaceholderText="{x:Bind ViewModel.Export.DefaultFileName, Mode=OneWay}"
-                                Text="{x:Bind ViewModel.Export.FileName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                            <TextBlock
-                                VerticalAlignment="Center"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Text=".pdf" />
+                <!--  Phần trên cuộn được; nút Lưu ở hàng dưới luôn nhìn thấy  -->
+                <ScrollViewer Padding="0,0,12,0">
+                    <StackPanel Spacing="24">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <Border Style="{StaticResource StepCircleStyle}">
+                                <TextBlock Style="{StaticResource StepNumberStyle}" Text="3" />
+                            </Border>
+                            <TextBlock Style="{StaticResource StepTitleStyle}" Text="Lưu thành file PDF" />
                         </StackPanel>
+
+                        <!--
+                            Tên file. UpdateSourceTrigger=PropertyChanged: đẩy giá trị về ViewModel sau mỗi phím gõ
+                            (mặc định TextBox chỉ đẩy khi mất focus), nên lỗi ký tự không hợp lệ hiện ngay.
+                        -->
+                        <StackPanel Spacing="6">
+                            <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Tên file" />
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox
+                                    AutomationProperties.Name="Tên file"
+                                    FontSize="17"
+                                    PlaceholderText="{x:Bind ViewModel.Export.DefaultFileName, Mode=OneWay}"
+                                    Text="{x:Bind ViewModel.Export.FileName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    VerticalAlignment="Center"
+                                    FontSize="17"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Text=".pdf" />
+                            </Grid>
+                            <TextBlock Style="{StaticResource HelpTextStyle}" Text="{x:Bind ViewModel.Export.FileNameHelpText, Mode=OneWay}" />
+                            <TextBlock
+                                Style="{StaticResource ErrorTextStyle}"
+                                Text="{x:Bind ViewModel.Export.FileNameError, Mode=OneWay}"
+                                Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(ViewModel.Export.HasFileNameError), Mode=OneWay}" />
+                        </StackPanel>
+
+                        <!--
+                            Kích thước file: RadioButtons lấy item từ ViewModel.Export.Presets, ItemTemplate vẽ nội dung
+                            mỗi nút. SelectedIndex = -1 khi đang dùng tuỳ chỉnh nâng cao (không nút nào được chọn).
+                        -->
+                        <StackPanel Spacing="6">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Kích thước file" />
+                                <ProgressRing
+                                    Width="16"
+                                    Height="16"
+                                    IsActive="{x:Bind ViewModel.Export.IsEstimating, Mode=OneWay}" />
+                            </StackPanel>
+                            <RadioButtons ItemsSource="{x:Bind ViewModel.Export.Presets}" SelectedIndex="{x:Bind ViewModel.Export.SelectedPresetIndex, Mode=TwoWay}">
+                                <RadioButtons.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:PresetOptionViewModel">
+                                        <Grid MinWidth="290" ColumnSpacing="12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Spacing="2">
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <TextBlock FontSize="17" Text="{x:Bind Name}" />
+                                                    <Border
+                                                        Padding="6,1"
+                                                        VerticalAlignment="Center"
+                                                        Background="{ThemeResource AccentFillColorDefaultBrush}"
+                                                        CornerRadius="4"
+                                                        Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(IsRecommended)}">
+                                                        <TextBlock
+                                                            FontSize="12"
+                                                            Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
+                                                            Text="Nên chọn" />
+                                                    </Border>
+                                                </StackPanel>
+                                                <TextBlock Style="{StaticResource HelpTextStyle}" Text="{x:Bind Description}" />
+                                            </StackPanel>
+                                            <TextBlock
+                                                Grid.Column="1"
+                                                VerticalAlignment="Center"
+                                                FontSize="14"
+                                                Text="{x:Bind EstimatedSizeText, Mode=OneWay}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </RadioButtons.ItemTemplate>
+                            </RadioButtons>
+                            <TextBlock
+                                Style="{StaticResource HelpTextStyle}"
+                                Text="{x:Bind ViewModel.Export.CustomSummaryText, Mode=OneWay}"
+                                Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(ViewModel.Export.IsCustom), Mode=OneWay}" />
+                        </StackPanel>
+
+                        <!--
+                            Expander: khung gập/mở có tiêu đề. Mặc định gập lại (IsExpanded="False")
+                            để người dùng thường không phải thấy các tuỳ chọn kỹ thuật.
+                        -->
+                        <Expander
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Stretch"
+                            FontSize="16"
+                            Header="Tuỳ chỉnh nâng cao"
+                            IsExpanded="False">
+                            <StackPanel Spacing="12">
+                                <TextBlock Style="{StaticResource HelpTextStyle}" Text="Chỉ dùng khi muốn tự chọn. Kéo thanh hoặc sửa số sẽ bỏ chọn 3 mục ở trên." />
+                                <Slider
+                                    FontSize="16"
+                                    Header="Chất lượng ảnh (1–100)"
+                                    Maximum="100"
+                                    Minimum="1"
+                                    StepFrequency="1"
+                                    Value="{x:Bind ViewModel.Export.CustomQuality, Mode=TwoWay}" />
+                                <!--  Để trống thì Value = NaN, ViewModel hiểu là "giữ nguyên chiều rộng".  -->
+                                <NumberBox
+                                    FontSize="16"
+                                    Header="Chiều rộng tối đa (điểm ảnh)"
+                                    Maximum="20000"
+                                    Minimum="64"
+                                    PlaceholderText="Để trống: giữ nguyên"
+                                    SmallChange="128"
+                                    SpinButtonPlacementMode="Inline"
+                                    Value="{x:Bind ViewModel.Export.CustomMaxWidth, Mode=TwoWay}" />
+                                <TextBlock
+                                    Style="{StaticResource ErrorTextStyle}"
+                                    Text="{x:Bind ViewModel.Export.ValidationMessage, Mode=OneWay}"
+                                    Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(ViewModel.Export.HasValidationError), Mode=OneWay}" />
+                            </StackPanel>
+                        </Expander>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!--  Hàng dưới: thẻ kết quả + nút Lưu (hoặc thẻ đang lưu)  -->
+                <StackPanel Grid.Row="1" Spacing="12">
+
+                    <!--  Lưu xong: thẻ xanh  -->
+                    <Border
+                        Padding="16"
+                        Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
+                        BorderBrush="{ThemeResource SystemFillColorSuccessBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(ViewModel.Export.IsResultSuccess), Mode=OneWay}">
+                        <StackPanel Spacing="10">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon
+                                    Foreground="{ThemeResource SystemFillColorSuccessBrush}"
+                                    Glyph="&#xE73E;" />
+                                <TextBlock Style="{StaticResource FieldLabelStyle}" Text="{x:Bind ViewModel.Export.ResultTitle, Mode=OneWay}" />
+                            </StackPanel>
+                            <TextBlock Text="{x:Bind ViewModel.Export.ResultMessage, Mode=OneWay}" TextWrapping="Wrap" />
+                            <Button
+                                MinHeight="44"
+                                HorizontalAlignment="Stretch"
+                                Command="{x:Bind ViewModel.Export.OpenResultCommand}"
+                                Content="Mở file PDF"
+                                FontSize="16"
+                                Style="{StaticResource AccentButtonStyle}" />
+                            <Button
+                                HorizontalAlignment="Stretch"
+                                Command="{x:Bind ViewModel.Export.OpenFolderCommand}"
+                                Content="Mở thư mục chứa file" />
+                            <Button
+                                HorizontalAlignment="Stretch"
+                                Command="{x:Bind ViewModel.NewDocumentCommand}"
+                                Content="Làm file mới" />
+                        </StackPanel>
+                    </Border>
+
+                    <!--  Huỷ hoặc lỗi: thẻ thông báo rõ ràng ở cùng chỗ  -->
+                    <Border
+                        Padding="16"
+                        Background="{ThemeResource SystemFillColorCautionBackgroundBrush}"
+                        BorderBrush="{ThemeResource SystemFillColorCautionBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(ViewModel.Export.IsResultProblem), Mode=OneWay}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Style="{StaticResource FieldLabelStyle}" Text="{x:Bind ViewModel.Export.ResultTitle, Mode=OneWay}" />
+                            <TextBlock Text="{x:Bind ViewModel.Export.ResultMessage, Mode=OneWay}" TextWrapping="Wrap" />
+                            <Button
+                                HorizontalAlignment="Stretch"
+                                Command="{x:Bind ViewModel.Export.DismissResultCommand}"
+                                Content="Đã hiểu" />
+                        </StackPanel>
+                    </Border>
+
+                    <!--  Nút Lưu; Ctrl+E gọi cùng command  -->
+                    <StackPanel Spacing="8" Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(ViewModel.Export.IsNotExporting), Mode=OneWay}">
+                        <Button
+                            MinHeight="56"
+                            HorizontalAlignment="Stretch"
+                            Command="{x:Bind ViewModel.Export.ExportCommand}"
+                            FontSize="19"
+                            Style="{StaticResource AccentButtonStyle}">
+                            <Button.KeyboardAccelerators>
+                                <KeyboardAccelerator Key="E" Modifiers="Control" />
+                            </Button.KeyboardAccelerators>
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <SymbolIcon Symbol="Save" />
+                                <TextBlock Text="{x:Bind ViewModel.Export.SaveButtonText, Mode=OneWay}" />
+                            </StackPanel>
+                        </Button>
                         <TextBlock
-                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
-                            Style="{StaticResource CaptionTextBlockStyle}"
-                            Text="{x:Bind ViewModel.Export.FileNameError, Mode=OneWay}"
-                            TextWrapping="Wrap"
-                            Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(ViewModel.Export.HasFileNameError), Mode=OneWay}" />
+                            HorizontalAlignment="Center"
+                            Style="{StaticResource HelpTextStyle}"
+                            Text="{x:Bind ViewModel.Export.SaveHintText, Mode=OneWay}"
+                            TextAlignment="Center" />
                     </StackPanel>
 
-                    <!--  Dung lượng ước tính; bấm để xem chi tiết từng mức nén  -->
-                    <Button
-                        Grid.Column="3"
-                        VerticalAlignment="Center"
-                        Style="{StaticResource SubtleButtonStyle}">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <StackPanel>
-                                <TextBlock
-                                    HorizontalAlignment="Right"
-                                    Style="{StaticResource BodyStrongTextBlockStyle}"
-                                    Text="{x:Bind ViewModel.Export.EstimatedSizeText, Mode=OneWay}" />
-                                <TextBlock
-                                    HorizontalAlignment="Right"
-                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                    Style="{StaticResource CaptionTextBlockStyle}"
-                                    Text="{x:Bind ViewModel.Export.CompareText, Mode=OneWay}" />
-                            </StackPanel>
-                            <ProgressRing
-                                Width="16"
-                                Height="16"
-                                IsActive="{x:Bind ViewModel.Export.IsEstimating, Mode=OneWay}" />
-                        </StackPanel>
-                        <Button.Flyout>
-                            <Flyout Placement="TopEdgeAlignedRight">
-                                <StackPanel MinWidth="300" Spacing="12">
-                                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Dung lượng ước tính" />
-                                    <ItemsControl ItemsSource="{x:Bind ViewModel.Export.Presets}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate x:DataType="vm:PresetOptionViewModel">
-                                                <Grid Padding="0,4" ColumnSpacing="16">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="Auto" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <StackPanel>
-                                                        <TextBlock Text="{x:Bind Name}" />
-                                                        <TextBlock
-                                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                            Style="{StaticResource CaptionTextBlockStyle}"
-                                                            Text="{x:Bind Description}" />
-                                                    </StackPanel>
-                                                    <TextBlock
-                                                        Grid.Column="1"
-                                                        VerticalAlignment="Center"
-                                                        Text="{x:Bind EstimatedSizeText, Mode=OneWay}" />
-                                                </Grid>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                    <StackPanel Spacing="4" Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(ViewModel.Export.HasEstimate), Mode=OneWay}">
-                                        <ProgressBar
-                                            AutomationProperties.Name="Tỉ lệ so với ảnh gốc"
-                                            Maximum="100"
-                                            Value="{x:Bind ViewModel.Export.EstimateRatio, Mode=OneWay}" />
-                                        <TextBlock
-                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                            Style="{StaticResource CaptionTextBlockStyle}"
-                                            Text="Sai số thường trong khoảng ±20%" />
-                                    </StackPanel>
-                                </StackPanel>
-                            </Flyout>
-                        </Button.Flyout>
-                    </Button>
-
-                    <!--  Nút Xuất PDF; Ctrl+E gọi cùng command  -->
-                    <Button
-                        Grid.Column="4"
-                        MinWidth="120"
-                        VerticalAlignment="Center"
-                        Command="{x:Bind ViewModel.Export.ExportCommand}"
-                        Style="{StaticResource AccentButtonStyle}"
-                        Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(ViewModel.Export.IsNotExporting), Mode=OneWay}">
-                        <Button.KeyboardAccelerators>
-                            <KeyboardAccelerator Key="E" Modifiers="Control" />
-                        </Button.KeyboardAccelerators>
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <SymbolIcon Symbol="Save" />
-                            <TextBlock Text="Xuất PDF" />
-                        </StackPanel>
-                    </Button>
-
-                    <!--  Đang xuất: thay nút Xuất bằng tiến độ + Huỷ  -->
-                    <StackPanel
-                        Grid.Column="4"
-                        VerticalAlignment="Center"
-                        Orientation="Horizontal"
-                        Spacing="12"
+                    <!--  Đang lưu: thay nút Lưu bằng thẻ tiến độ + nút huỷ  -->
+                    <Border
+                        Padding="16"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
                         Visibility="{x:Bind helpers:XamlFunctions.ToVisibility(ViewModel.Export.IsExporting), Mode=OneWay}">
-                        <StackPanel Width="180" VerticalAlignment="Center" Spacing="4">
-                            <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="{x:Bind ViewModel.Export.ProgressText, Mode=OneWay}" />
+                        <StackPanel Spacing="12">
+                            <TextBlock Style="{StaticResource FieldLabelStyle}" Text="{x:Bind ViewModel.Export.ProgressText, Mode=OneWay}" />
                             <ProgressBar
-                                AutomationProperties.Name="Tiến độ xuất"
+                                AutomationProperties.Name="Tiến độ lưu"
                                 Maximum="100"
                                 Value="{x:Bind ViewModel.Export.Progress, Mode=OneWay}" />
+                            <Button
+                                HorizontalAlignment="Stretch"
+                                Command="{x:Bind ViewModel.Export.CancelCommand}"
+                                Content="Huỷ, không lưu nữa" />
                         </StackPanel>
-                        <Button Command="{x:Bind ViewModel.Export.CancelCommand}" Content="Huỷ" />
-                    </StackPanel>
-                </Grid>
-            </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
         </Border>
     </Grid>
 </Page>

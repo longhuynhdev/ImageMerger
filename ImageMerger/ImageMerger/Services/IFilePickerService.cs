@@ -6,8 +6,11 @@ namespace ImageMerger.Services;
 /// </summary>
 public interface IFilePickerService
 {
-    /// <summary>Cho người dùng chọn nhiều ảnh. Trả về danh sách rỗng nếu người dùng huỷ.</summary>
+    /// <summary>Cho người dùng chọn nhiều ảnh (không gồm PDF). Trả về danh sách rỗng nếu người dùng huỷ.</summary>
     Task<IReadOnlyList<string>> PickImagesAsync();
+
+    /// <summary>Cho người dùng chọn nhiều file PDF. Trả về danh sách rỗng nếu người dùng huỷ.</summary>
+    Task<IReadOnlyList<string>> PickPdfsAsync();
 
     /// <summary>Hỏi nơi lưu file. Trả về <c>null</c> nếu người dùng huỷ.</summary>
     /// <param name="suggestedFileName">Tên gợi ý, không gồm phần mở rộng.</param>

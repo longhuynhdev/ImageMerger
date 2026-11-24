@@ -9,7 +9,11 @@ public static class SupportedFormats
     /// <summary>Phần mở rộng của file PDF đầu vào.</summary>
     public const string PdfExtension = ".pdf";
 
-    public static IReadOnlyList<string> InputExtensions { get; } = (string[])[".png", ".jpg", ".jpeg", PdfExtension];
+    /// <summary>Ảnh (không gồm PDF): dùng cho nút "Thêm ảnh".</summary>
+    public static IReadOnlyList<string> ImageExtensions { get; } = (string[])[".png", ".jpg", ".jpeg"];
+
+    /// <summary>Mọi định dạng nhận được: dùng cho kéo thả từ Explorer.</summary>
+    public static IReadOnlyList<string> InputExtensions { get; } = (string[])[.. ImageExtensions, PdfExtension];
 
     public static bool IsSupportedInput(string path) =>
         InputExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);

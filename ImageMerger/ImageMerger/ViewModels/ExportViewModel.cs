@@ -4,16 +4,17 @@ using ImageMerger.Models;
 using ImageMerger.Services;
 using ImageMerger.Services.Compression;
 using ImageMerger.Services.Export;
-using Microsoft.UI.Xaml.Controls;
 
 namespace ImageMerger.ViewModels;
 
 /// <summary>
-/// Thanh xuất PDF ở đáy trang: mức nén, dung lượng ước tính, nút Xuất, tiến độ và kết quả.
+/// Bước 3 "Lưu thành file PDF": tên file, kích thước file (mức nén), dung lượng ước tính,
+/// nút Lưu, tiến độ và thẻ kết quả.
 /// Sống cùng MainViewModel (property <c>Export</c>) nên lựa chọn được giữ suốt phiên làm việc.
 ///
-/// Các control Tuỳ chỉnh (slider quality, chiều rộng tối đa) chỉ hiện khi <see cref="IsCustom"/>,
-/// để View không phải tự suy luận.
+/// Người dùng chỉ thấy 3 lựa chọn (Nhỏ gọn / Vừa phải / Chất lượng cao nhất). Mức "Tuỳ chỉnh" không có nút riêng:
+/// chỉnh slider hoặc ô chiều rộng trong "Tuỳ chỉnh nâng cao" là tự chuyển sang tuỳ chỉnh,
+/// bấm lại một trong 3 lựa chọn là quay về mức có sẵn.
 /// </summary>
 public sealed class ExportViewModel : BindableBase
 {
@@ -35,7 +36,6 @@ public sealed class ExportViewModel : BindableBase
     private double _customMaxWidth = 2048;
     private int _itemCount;
     private bool _hasPageRangeErrors;
-    private long _sourceBytes;
     private string _fileName = "";
 
     private SizeEstimate? _estimate;
@@ -50,7 +50,7 @@ public sealed class ExportViewModel : BindableBase
     private string _progressText = "";
 
     private bool _hasResult;
-    private InfoBarSeverity _resultSeverity;
+    private bool _isResultSuccess;
     private string _resultTitle = "";
     private string _resultMessage = "";
     private string? _resultPath;
@@ -58,7 +58,7 @@ public sealed class ExportViewModel : BindableBase
     /// <summary>Huỷ lần xuất đang chạy. Chỉ khác null trong lúc đang xuất.</summary>
     private CancellationTokenSource? _exportCts;
 
-    /// <param name="getSources">Chụp danh sách ảnh hiện tại (theo đúng thứ tự trên màn hình) lúc bấm Xuất.</param>
+    /// <param name="getSources">Chụp danh sách ảnh hiện tại (theo đúng thứ tự trên màn hình) lúc bấm Lưu.</param>
     public ExportViewModel(
         IFilePickerService filePickerService,
         PdfExporter pdfExporter,
@@ -70,23 +70,24 @@ public sealed class ExportViewModel : BindableBase
         _sizeEstimator = sizeEstimator;
         _getSources = getSources;
 
-        // Thứ tự khớp enum CompressionPreset, nên SelectedPresetIndex dùng được làm chỉ số.
+        // Thứ tự hiển thị: nhỏ nhất trước. Thứ tự này KHÁC thứ tự enum, nên SelectedPresetIndex tra theo Preset.
         Presets = (PresetOptionViewModel[])
         [
-            new PresetOptionViewModel("Gốc", Describe(PresetSettings.Original)),
-            new PresetOptionViewModel("Cân bằng", Describe(PresetSettings.Balanced)),
-            new PresetOptionViewModel("Nhỏ gọn", Describe(PresetSettings.Compact)),
-            new PresetOptionViewModel("Tuỳ chỉnh", "Tự chọn chất lượng và chiều rộng"),
+            new PresetOptionViewModel(CompressionPreset.Compact, "Nhỏ gọn", "Hợp để gửi qua Zalo, email"),
+            new PresetOptionViewModel(CompressionPreset.Balanced, "Vừa phải", "Ảnh rõ nét, file không quá nặng", isRecommended: true),
+            new PresetOptionViewModel(CompressionPreset.Original, "Chất lượng cao nhất", "Giữ nguyên độ nét, file rất nặng"),
         ];
 
-        ExportCommand = new AsyncRelayCommand(
-            ExportAsync, () => _itemCount > 0 && IsValid && !_hasPageRangeErrors && !HasFileNameError && !IsExporting);
+        ExportCommand = new AsyncRelayCommand(ExportAsync, () => CanSave && !IsExporting);
         CancelCommand = new RelayCommand(() => _exportCts?.Cancel(), () => IsExporting);
-        OpenResultCommand = new RelayCommand(OpenResult, () => CanOpenResult);
+        OpenResultCommand = new RelayCommand(OpenResult, () => _resultPath is not null);
+        OpenFolderCommand = new RelayCommand(OpenFolder, () => _resultPath is not null);
+        DismissResultCommand = new RelayCommand(DismissResult);
     }
 
-    // --- Mức nén ---
+    // --- Kích thước file (mức nén) ---
 
+    /// <summary>3 lựa chọn của mục "Kích thước file".</summary>
     public IReadOnlyList<PresetOptionViewModel> Presets { get; }
 
     public CompressionPreset Preset
@@ -96,44 +97,70 @@ public sealed class ExportViewModel : BindableBase
         {
             if (SetProperty(ref _preset, value))
             {
-                OnPropertiesChanged(nameof(SelectedPresetIndex), nameof(IsCustom),
+                OnPropertiesChanged(nameof(SelectedPresetIndex), nameof(IsCustom), nameof(CustomSummaryText),
                     nameof(ValidationMessage), nameof(HasValidationError), nameof(IsValid));
-                ExportCommand.NotifyCanExecuteChanged();
+                NotifySaveStateChanged();
                 RequestEstimate();
             }
         }
     }
 
-    /// <summary>RadioButtons dùng SelectedIndex (số nguyên), thứ tự item khớp thứ tự enum.</summary>
+    /// <summary>
+    /// Chỉ số trong <see cref="Presets"/> cho RadioButtons.SelectedIndex.
+    /// Đang dùng tuỳ chỉnh thì trả -1: không nút nào được chọn, người dùng thấy rõ là đang không dùng mức có sẵn.
+    /// </summary>
     public int SelectedPresetIndex
     {
-        get => (int)Preset;
+        get
+        {
+            for (int i = 0; i < Presets.Count; i++)
+            {
+                if (Presets[i].Preset == Preset) return i;
+            }
+            return -1;
+        }
         set
         {
-            if (value < 0 || (CompressionPreset)value == Preset) return;
+            // RadioButtons gửi -1 khi ta bỏ chọn tất cả (lúc chuyển sang tuỳ chỉnh): bỏ qua.
+            if (value < 0 || value >= Presets.Count) return;
+            CompressionPreset preset = Presets[value].Preset;
+            if (preset == Preset) return;
 
-            // Chuyển sang Tuỳ chỉnh: lấy giá trị của preset đang chọn làm điểm xuất phát,
-            // người dùng chỉ việc chỉnh thêm thay vì bắt đầu từ con số lạ.
-            if ((CompressionPreset)value == CompressionPreset.Custom)
-            {
-                CopyToCustom(PresetSettings.For(Preset));
-            }
-            Preset = (CompressionPreset)value;
+            // Đưa giá trị của mức vừa chọn vào các ô tuỳ chỉnh, để khi mở "Tuỳ chỉnh nâng cao"
+            // người dùng thấy đúng con số đang dùng và chỉnh tiếp từ đó.
+            ShowInCustomControls(PresetSettings.For(preset));
+            Preset = preset;
         }
     }
 
     public bool IsCustom => Preset == CompressionPreset.Custom;
 
+    /// <summary>Dòng giải thích khi đang dùng tuỳ chỉnh (không nút nào trong 3 lựa chọn được chọn).</summary>
+    public string CustomSummaryText
+    {
+        get
+        {
+            if (!IsCustom) return "";
+            PresetSettings s = CurrentSettings();
+            string width = s.MaxWidth is int w ? $"rộng tối đa {w} điểm ảnh" : "giữ nguyên kích thước";
+            string size = HasEstimate ? $", {EstimatedSizeText}" : "";
+            return $"Đang dùng tuỳ chỉnh: chất lượng {s.PdfQuality}, {width}{size}. Bấm một lựa chọn ở trên để quay lại.";
+        }
+    }
+
     // --- Giá trị Tuỳ chỉnh ---
 
-    /// <summary>Slider.Value là double, nên property cũng là double.</summary>
+    /// <summary>
+    /// Slider.Value là double, nên property cũng là double.
+    /// Người dùng kéo slider nghĩa là muốn tuỳ chỉnh, nên chuyển sang <see cref="CompressionPreset.Custom"/>.
+    /// </summary>
     public double CustomQuality
     {
         get => _customQuality;
         set
         {
             // Slider báo giá trị liên tục khi kéo; debounce trong RequestEstimate gom lại thành một lần tính.
-            if (SetProperty(ref _customQuality, value)) RequestEstimate();
+            if (SetProperty(ref _customQuality, value)) OnCustomValueChanged();
         }
     }
 
@@ -147,13 +174,37 @@ public sealed class ExportViewModel : BindableBase
         get => _customMaxWidth;
         set
         {
-            if (SetProperty(ref _customMaxWidth, value))
-            {
-                OnPropertiesChanged(nameof(ValidationMessage), nameof(HasValidationError), nameof(IsValid));
-                ExportCommand.NotifyCanExecuteChanged();
-                RequestEstimate();
-            }
+            if (SetProperty(ref _customMaxWidth, value)) OnCustomValueChanged();
         }
+    }
+
+    /// <summary>
+    /// Người dùng vừa đổi một giá trị tuỳ chỉnh. Gán Preset = Custom sẽ báo SelectedPresetIndex = -1 (bỏ chọn 3 nút)
+    /// và tự tính lại ước tính; nếu đã ở Custom rồi thì chỉ cần tính lại.
+    /// </summary>
+    private void OnCustomValueChanged()
+    {
+        if (!IsCustom)
+        {
+            Preset = CompressionPreset.Custom;
+            return;
+        }
+
+        OnPropertiesChanged(nameof(CustomSummaryText), nameof(ValidationMessage), nameof(HasValidationError), nameof(IsValid));
+        NotifySaveStateChanged();
+        RequestEstimate();
+    }
+
+    /// <summary>
+    /// Gán thẳng vào field (không qua setter) rồi báo cho UI: nếu đi qua setter thì
+    /// <see cref="OnCustomValueChanged"/> sẽ tưởng người dùng vừa chỉnh và chuyển sang Tuỳ chỉnh.
+    /// Slider/NumberBox nhận giá trị mới rồi ghi ngược lại đúng giá trị đó, SetProperty thấy không đổi nên bỏ qua.
+    /// </summary>
+    private void ShowInCustomControls(PresetSettings settings)
+    {
+        _customQuality = settings.PdfQuality;
+        _customMaxWidth = settings.MaxWidth ?? double.NaN;
+        OnPropertiesChanged(nameof(CustomQuality), nameof(CustomMaxWidth));
     }
 
     // --- Kiểm tra hợp lệ ---
@@ -161,7 +212,7 @@ public sealed class ExportViewModel : BindableBase
     /// <summary>Chuỗi rỗng nghĩa là hợp lệ.</summary>
     public string ValidationMessage =>
         IsCustom && !double.IsNaN(CustomMaxWidth) && CustomMaxWidth is < MinMaxWidth or > MaxMaxWidth
-            ? $"Chiều rộng tối đa phải từ {MinMaxWidth} đến {MaxMaxWidth} px (để trống nếu giữ nguyên)."
+            ? $"Chiều rộng tối đa phải từ {MinMaxWidth} đến {MaxMaxWidth} điểm ảnh (để trống nếu muốn giữ nguyên)."
             : "";
 
     public bool HasValidationError => ValidationMessage.Length > 0;
@@ -182,7 +233,7 @@ public sealed class ExportViewModel : BindableBase
             if (SetProperty(ref _fileName, value))
             {
                 OnPropertiesChanged(nameof(FileNameError), nameof(HasFileNameError));
-                ExportCommand.NotifyCanExecuteChanged();
+                NotifySaveStateChanged();
             }
         }
     }
@@ -191,8 +242,14 @@ public sealed class ExportViewModel : BindableBase
     public string DefaultFileName
     {
         get => _defaultFileName;
-        private set => SetProperty(ref _defaultFileName, value);
+        private set
+        {
+            if (SetProperty(ref _defaultFileName, value)) OnPropertyChanged(nameof(FileNameHelpText));
+        }
     }
+
+    /// <summary>Dòng hướng dẫn dưới ô tên file.</summary>
+    public string FileNameHelpText => $"Để trống thì dùng tên “{DefaultFileName}”.";
 
     /// <summary>Tên file sẽ gợi ý cho FileSavePicker: đã trim, bỏ ".pdf" người dùng tự gõ, trống thì lấy tên mặc định.</summary>
     public string ResolvedFileName
@@ -219,19 +276,10 @@ public sealed class ExportViewModel : BindableBase
     // --- Dung lượng ước tính ---
     // Các property dưới đây đều tính từ _estimate; RequestEstimate/RunEstimateAsync cập nhật nó.
 
-    /// <summary>Ví dụ "≈ 4.2 MB". Trong lúc tính lại vẫn giữ số cũ (ProgressRing bên cạnh báo đang tính).</summary>
+    /// <summary>Ví dụ "khoảng 4,2 MB". Trong lúc tính lại vẫn giữ số cũ (ProgressRing bên cạnh báo đang tính).</summary>
     public string EstimatedSizeText => FormatEstimate(_estimate);
 
-    /// <summary>Dòng chú thích dưới số ước tính, ví dụ "35% so với ảnh gốc (48.3 MB)".</summary>
-    public string CompareText =>
-        _itemCount == 0 ? "Chưa có ảnh"
-        : !IsValid ? "Sửa tuỳ chọn để xem ước tính"
-        : _hasPageRangeErrors ? "Sửa ô chọn trang để xem ước tính"
-        : _estimate is null ? "Đang ước tính…"
-        : _sourceBytes > 0 ? $"{EstimateRatio:0}% so với file gốc ({FileSizeFormatter.Format(_sourceBytes)})"
-        : "";
-
-    /// <summary>Bật ProgressRing nhỏ cạnh số ước tính (cả trong 300 ms chờ debounce).</summary>
+    /// <summary>Bật ProgressRing nhỏ cạnh tiêu đề "Kích thước file" (cả trong 300 ms chờ debounce).</summary>
     public bool IsEstimating
     {
         get => _isEstimating;
@@ -240,11 +288,30 @@ public sealed class ExportViewModel : BindableBase
 
     public bool HasEstimate => _estimate is not null;
 
-    /// <summary>Tỉ lệ dung lượng ước tính so với tổng dung lượng ảnh gốc, 0–100, cho ProgressBar trong flyout.</summary>
-    public double EstimateRatio =>
-        _estimate is null || _sourceBytes <= 0 ? 0 : Math.Min(100, 100.0 * _estimate.Bytes / _sourceBytes);
+    // --- Nút Lưu ---
 
-    // --- Đang xuất ---
+    /// <summary>Đủ điều kiện để lưu (chưa tính việc đang lưu dở).</summary>
+    public bool CanSave => _itemCount > 0 && IsValid && !_hasPageRangeErrors && !HasFileNameError;
+
+    /// <summary>Ví dụ "Lưu file PDF (khoảng 4,2 MB)". Chưa có ước tính thì chỉ "Lưu file PDF".</summary>
+    public string SaveButtonText => HasEstimate ? $"Lưu file PDF ({EstimatedSizeText})" : "Lưu file PDF";
+
+    /// <summary>Dòng chữ dưới nút Lưu: nói rõ bấm xong sẽ thế nào, hoặc vì sao nút đang mờ.</summary>
+    public string SaveHintText =>
+        _itemCount == 0 ? "Hãy thêm ảnh hoặc file PDF ở bước 1 trước."
+        : HasFileNameError ? "Hãy sửa tên file ở trên trước."
+        : _hasPageRangeErrors ? "Hãy sửa ô chọn trang ở bước 2 trước."
+        : !IsValid ? "Hãy sửa chiều rộng trong “Tuỳ chỉnh nâng cao” trước."
+        : "Sau khi bấm, bạn chọn thư mục để lưu file.";
+
+    /// <summary>Mọi thứ ảnh hưởng tới việc lưu được hay không đều gọi hàm này: báo lại chữ gợi ý và CanExecute.</summary>
+    private void NotifySaveStateChanged()
+    {
+        OnPropertiesChanged(nameof(CanSave), nameof(SaveHintText));
+        ExportCommand.NotifyCanExecuteChanged();
+    }
+
+    // --- Đang lưu ---
 
     public bool IsExporting
     {
@@ -260,38 +327,47 @@ public sealed class ExportViewModel : BindableBase
         }
     }
 
-    /// <summary>x:Bind không có toán tử "!", nên cần property ngược để ẩn nút Xuất khi đang xuất.</summary>
+    /// <summary>x:Bind không có toán tử "!", nên cần property ngược để ẩn nút Lưu khi đang lưu.</summary>
     public bool IsNotExporting => !IsExporting;
 
-    /// <summary>Tiến độ xuất, 0–100, bind vào ProgressBar.</summary>
+    /// <summary>Tiến độ lưu, 0–100, bind vào ProgressBar.</summary>
     public double Progress
     {
         get => _progress;
         private set => SetProperty(ref _progress, value);
     }
 
-    /// <summary>Ví dụ "Đang xuất PDF… 45%".</summary>
+    /// <summary>Ví dụ "Đang lưu trang 3 trên 7…".</summary>
     public string ProgressText
     {
         get => _progressText;
         private set => SetProperty(ref _progressText, value);
     }
 
-    // --- Kết quả (InfoBar) ---
+    // --- Thẻ kết quả ---
 
-    /// <summary>TwoWay: InfoBar tự đặt lại false khi người dùng bấm nút đóng.</summary>
+    /// <summary>Hiện thẻ kết quả (xanh khi xong, thẻ thông báo khi huỷ hoặc lỗi).</summary>
     public bool HasResult
     {
         get => _hasResult;
-        set => SetProperty(ref _hasResult, value);
+        private set
+        {
+            if (SetProperty(ref _hasResult, value)) OnPropertiesChanged(nameof(IsResultSuccess), nameof(IsResultProblem));
+        }
     }
 
-    /// <summary>Success khi xuất xong; Informational khi huỷ; Error khi lỗi.</summary>
-    public InfoBarSeverity ResultSeverity
+    /// <summary>Lưu thành công: thẻ xanh với các nút Mở file / Mở thư mục / Làm file mới.</summary>
+    public bool IsResultSuccess
     {
-        get => _resultSeverity;
-        private set => SetProperty(ref _resultSeverity, value);
+        get => _isResultSuccess && _hasResult;
+        private set
+        {
+            if (SetProperty(ref _isResultSuccess, value)) OnPropertyChanged(nameof(IsResultProblem));
+        }
     }
+
+    /// <summary>Huỷ hoặc lỗi: thẻ thông báo với nút "Đã hiểu".</summary>
+    public bool IsResultProblem => _hasResult && !_isResultSuccess;
 
     public string ResultTitle
     {
@@ -305,32 +381,32 @@ public sealed class ExportViewModel : BindableBase
         private set => SetProperty(ref _resultMessage, value);
     }
 
-    /// <summary>Nút "Mở file" chỉ hiện khi đã xuất thành công.</summary>
-    public bool CanOpenResult => _resultPath is not null;
-
     // --- Command ---
 
-    /// <summary>Phím tắt Ctrl+E và nút "Xuất PDF" đều gọi command này.</summary>
+    /// <summary>Phím tắt Ctrl+E và nút "Lưu file PDF" đều gọi command này.</summary>
     public AsyncRelayCommand ExportCommand { get; }
 
-    /// <summary>Nút "Huỷ" cạnh thanh tiến độ: huỷ <see cref="_exportCts"/> của lần xuất đang chạy.</summary>
+    /// <summary>Nút "Huỷ, không lưu nữa": huỷ <see cref="_exportCts"/> của lần lưu đang chạy.</summary>
     public RelayCommand CancelCommand { get; }
 
     public RelayCommand OpenResultCommand { get; }
 
+    public RelayCommand OpenFolderCommand { get; }
+
+    /// <summary>Nút "Đã hiểu" trên thẻ huỷ/lỗi.</summary>
+    public RelayCommand DismissResultCommand { get; }
+
     /// <summary>
-    /// MainViewModel gọi mỗi khi danh sách ảnh đổi: bật/tắt nút Xuất và cập nhật tên file mặc định.
+    /// MainViewModel gọi mỗi khi danh sách ảnh đổi: bật/tắt nút Lưu và cập nhật tên file mặc định.
     /// Chỉ đổi tên mặc định khi danh sách đi từ trống sang có ảnh, để tên không nhảy lung tung khi sắp xếp.
     /// Khi danh sách bị xoá hết thì quên luôn tên người dùng đã gõ (coi như bắt đầu bộ ảnh mới).
     /// </summary>
     /// <param name="count">Số ảnh hiện có.</param>
     /// <param name="firstItemPath">Đường dẫn ảnh đầu tiên, <c>null</c> nếu danh sách trống.</param>
-    /// <param name="sourceBytes">Tổng dung lượng các file ảnh gốc, để so sánh với dung lượng ước tính.</param>
-    public void SetItems(int count, string? firstItemPath, long sourceBytes)
+    public void SetItems(int count, string? firstItemPath)
     {
         bool wasEmpty = _itemCount == 0;
         _itemCount = count;
-        _sourceBytes = sourceBytes;
 
         if (count == 0)
         {
@@ -344,7 +420,7 @@ public sealed class ExportViewModel : BindableBase
         }
 
         OnPropertiesChanged(nameof(FileNameError), nameof(HasFileNameError));
-        ExportCommand.NotifyCanExecuteChanged();
+        NotifySaveStateChanged();
 
         // Sắp xếp lại cũng gọi vào đây. Tính lại vẫn rẻ vì bản mẫu và bpp đã được cache.
         RequestEstimate();
@@ -352,14 +428,13 @@ public sealed class ExportViewModel : BindableBase
 
     /// <summary>
     /// MainViewModel gọi khi ô chọn trang của một file PDF đổi, hoặc khi danh sách đổi.
-    /// Còn ô nào sai thì tắt nút Xuất và không ước tính. Lựa chọn trang đổi thì dung lượng cũng đổi, nên tính lại.
+    /// Còn ô nào sai thì tắt nút Lưu và không ước tính. Lựa chọn trang đổi thì dung lượng cũng đổi, nên tính lại.
     /// </summary>
     /// <param name="hasErrors">Có ít nhất một file PDF đang nhập sai ô chọn trang.</param>
     public void SetPageRangeErrors(bool hasErrors)
     {
         _hasPageRangeErrors = hasErrors;
-        OnPropertyChanged(nameof(CompareText));
-        ExportCommand.NotifyCanExecuteChanged();
+        NotifySaveStateChanged();
         RequestEstimate();
     }
 
@@ -391,7 +466,7 @@ public sealed class ExportViewModel : BindableBase
     }
 
     /// <summary>
-    /// Chờ debounce rồi ước tính: mức nén đang chọn trước (số chính ở thanh đáy), sau đó các preset còn lại cho flyout.
+    /// Chờ debounce rồi ước tính: mức nén đang dùng trước (số trên nút Lưu), sau đó 3 lựa chọn còn lại.
     ///
     /// Hàm này chạy trên UI thread. Việc nặng nằm trong <c>_sizeEstimator.EstimateAsync</c> (Task.Run, luồng nền);
     /// sau mỗi <c>await</c>, SynchronizationContext của WinUI đưa code quay lại UI thread, nên gán property ở đây
@@ -414,25 +489,13 @@ public sealed class ExportViewModel : BindableBase
             token.ThrowIfCancellationRequested();
             SetEstimate(currentEstimate);
 
-            for (int i = 0; i < Presets.Count; i++)
+            foreach (PresetOptionViewModel option in Presets)
             {
-                var preset = (CompressionPreset)i;
-                SizeEstimate? estimate;
-                if (preset == current.Preset)
-                {
-                    estimate = currentEstimate; // vừa tính xong ở trên
-                }
-                else if (preset == CompressionPreset.Custom)
-                {
-                    estimate = null; // Tuỳ chỉnh chỉ có số khi đang chọn
-                }
-                else
-                {
-                    estimate = await _sizeEstimator.EstimateAsync(sources, OptionsFor(preset, PresetSettings.For(preset)), token);
-                    token.ThrowIfCancellationRequested();
-                }
-
-                Presets[i].EstimatedSizeText = estimate is null ? PresetOptionViewModel.NoEstimateText : FormatEstimate(estimate);
+                SizeEstimate estimate = option.Preset == current.Preset
+                    ? currentEstimate // vừa tính xong ở trên
+                    : await _sizeEstimator.EstimateAsync(sources, OptionsFor(option.Preset, PresetSettings.For(option.Preset)), token);
+                token.ThrowIfCancellationRequested();
+                option.EstimatedSizeText = FormatEstimate(estimate);
             }
         }
         catch (OperationCanceledException)
@@ -441,7 +504,7 @@ public sealed class ExportViewModel : BindableBase
         }
         catch (Exception ex)
         {
-            // Ước tính chỉ là thông tin phụ: lỗi bất ngờ không được làm sập app hay chặn việc xuất.
+            // Ước tính chỉ là thông tin phụ: lỗi bất ngờ không được làm sập app hay chặn việc lưu.
             Debug.WriteLine($"[SizeEstimate] Lỗi: {ex}");
             SetEstimate(null);
         }
@@ -460,14 +523,14 @@ public sealed class ExportViewModel : BindableBase
     private void SetEstimate(SizeEstimate? estimate)
     {
         _estimate = estimate;
-        OnPropertiesChanged(nameof(EstimatedSizeText), nameof(CompareText), nameof(HasEstimate), nameof(EstimateRatio));
+        OnPropertiesChanged(nameof(EstimatedSizeText), nameof(HasEstimate), nameof(SaveButtonText), nameof(CustomSummaryText));
     }
 
     private static string FormatEstimate(SizeEstimate? estimate) =>
-        estimate is null ? "≈ — MB" : $"≈ {FileSizeFormatter.Format(estimate.Bytes)}";
+        estimate is null ? PresetOptionViewModel.NoEstimateText : $"khoảng {FileSizeFormatter.Format(estimate.Bytes)}";
 
     /// <summary>
-    /// Mở FileSavePicker rồi xuất. Mỗi lần xuất tạo một <see cref="CancellationTokenSource"/> mới;
+    /// Mở FileSavePicker (người dùng chọn thư mục) rồi lưu. Mỗi lần lưu tạo một <see cref="CancellationTokenSource"/> mới;
     /// <see cref="CancelCommand"/> gọi <c>Cancel()</c> trên nó, và exporter dừng ở lần kiểm tra token kế tiếp.
     /// </summary>
     private async Task ExportAsync()
@@ -477,23 +540,28 @@ public sealed class ExportViewModel : BindableBase
             ResolvedFileName, "Tệp PDF", FileExtension);
         if (outputPath is null) return;
 
-        // Chụp lại danh sách tại thời điểm bấm Xuất.
+        // Chụp lại danh sách tại thời điểm bấm Lưu.
         IReadOnlyList<ImageSourceInfo> sources = _getSources();
 
-        // Chỉ so sánh khi số ước tính khớp với tuỳ chọn đang xuất (không đang tính dở).
+        // Chỉ so sánh khi số ước tính khớp với tuỳ chọn đang lưu (không đang tính dở).
         SizeEstimate? estimate = IsEstimating ? null : _estimate;
+
+        // Exporter báo tiến độ theo nguồn (một ảnh hoặc cả một file PDF); đổi sang số trang để người dùng dễ hiểu.
+        int[] pagesBefore = CountPagesBefore(sources);
+        int totalPages = Math.Max(1, pagesBefore[^1]);
 
         // Progress<T> tạo trên UI thread sẽ gọi callback trên UI thread,
         // nên exporter báo tiến độ từ luồng nền vẫn cập nhật property an toàn.
         var progress = new Progress<double>(value =>
         {
             Progress = value * 100;
-            ProgressText = $"Đang xuất PDF… {Progress:0}%";
+            int doneSources = Math.Clamp((int)Math.Round(value * sources.Count), 0, sources.Count);
+            ProgressText = $"Đang lưu trang {Math.Min(pagesBefore[doneSources] + 1, totalPages)} trên {totalPages}…";
         });
 
         _exportCts = new CancellationTokenSource();
         Progress = 0;
-        ProgressText = "Đang xuất PDF…";
+        ProgressText = $"Đang lưu trang 1 trên {totalPages}…";
         HasResult = false;
         IsExporting = true;
         try
@@ -501,26 +569,26 @@ public sealed class ExportViewModel : BindableBase
             int pageCount = await _pdfExporter.ExportAsync(sources, outputPath, options, progress, _exportCts.Token);
 
             long size = new FileInfo(outputPath).Length;
-            string comparison = estimate is null
-                ? ""
-                : $"Ước tính {FormatEstimate(estimate)}, thực tế {FileSizeFormatter.Format(size)} " +
-                  $"(lệch {PercentError(estimate.Bytes, size):+0;-0;0}%) · ";
             ShowResult(
-                InfoBarSeverity.Success,
-                $"Đã lưu {Path.GetFileName(outputPath)} · {pageCount} trang · {FileSizeFormatter.Format(size)}",
-                comparison + outputPath,
+                success: true,
+                "Đã lưu xong",
+                $"File {Path.GetFileName(outputPath)}, {pageCount} trang, {FileSizeFormatter.Format(size)}.\n" +
+                $"Nằm trong thư mục: {Path.GetDirectoryName(outputPath)}",
                 outputPath);
 
             if (estimate is not null) LogEstimateAccuracy(options, pageCount, estimate, size);
         }
         catch (OperationCanceledException)
         {
-            ShowResult(InfoBarSeverity.Informational, "Đã huỷ xuất file", "", null);
+            ShowResult(success: false, "Chưa lưu file",
+                "Bạn đã bấm huỷ nên chưa có file nào được lưu. Bấm “Lưu file PDF” để thử lại.", null);
         }
         catch (Exception ex)
         {
             // Ranh giới với UI: mọi lỗi (file hỏng, ổ đầy, không có quyền ghi...) đều báo cho người dùng.
-            ShowResult(InfoBarSeverity.Error, "Xuất file thất bại", ex.Message, null);
+            ShowResult(success: false, "Không lưu được file",
+                $"Có lỗi xảy ra: {ex.Message}\nHãy thử lưu vào thư mục khác, hoặc kiểm tra các file ảnh và PDF còn mở được không.",
+                null);
         }
         finally
         {
@@ -530,15 +598,24 @@ public sealed class ExportViewModel : BindableBase
         }
     }
 
-    private void ShowResult(InfoBarSeverity severity, string title, string message, string? path)
+    private void ShowResult(bool success, string title, string message, string? path)
     {
-        ResultSeverity = severity;
+        IsResultSuccess = success;
         ResultTitle = title;
         ResultMessage = message;
         _resultPath = path;
-        OnPropertyChanged(nameof(CanOpenResult));
         OpenResultCommand.NotifyCanExecuteChanged();
+        OpenFolderCommand.NotifyCanExecuteChanged();
         HasResult = true;
+    }
+
+    /// <summary>Ẩn thẻ kết quả. Nút "Đã hiểu" và "Làm file mới" (MainViewModel) gọi hàm này.</summary>
+    public void DismissResult()
+    {
+        HasResult = false;
+        _resultPath = null;
+        OpenResultCommand.NotifyCanExecuteChanged();
+        OpenFolderCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>
@@ -554,8 +631,38 @@ public sealed class ExportViewModel : BindableBase
         }
         catch (Exception ex)
         {
-            ShowResult(InfoBarSeverity.Error, "Không mở được file", ex.Message, null);
+            ShowResult(success: false, "Không mở được file", ex.Message, null);
         }
+    }
+
+    /// <summary>Mở File Explorer tại thư mục chứa file và tô sáng file vừa lưu (tham số "/select,").</summary>
+    private void OpenFolder()
+    {
+        if (_resultPath is null) return;
+        try
+        {
+            Process.Start("explorer.exe", $"/select,\"{_resultPath}\"");
+        }
+        catch (Exception ex)
+        {
+            ShowResult(success: false, "Không mở được thư mục", ex.Message, null);
+        }
+    }
+
+    /// <summary>
+    /// pagesBefore[i] = số trang của các nguồn đứng trước nguồn i; phần tử cuối là tổng số trang.
+    /// Nguồn "cả file PDF" (PageIndex null) chiếm nhiều trang; chưa đọc xong PDF thì tạm tính 1.
+    /// </summary>
+    private static int[] CountPagesBefore(IReadOnlyList<ImageSourceInfo> sources)
+    {
+        var pagesBefore = new int[sources.Count + 1];
+        for (int i = 0; i < sources.Count; i++)
+        {
+            ImageSourceInfo s = sources[i];
+            int pages = s.PageIndex is null && SupportedFormats.IsPdf(s.Path) ? s.PdfPageCount ?? 1 : 1;
+            pagesBefore[i + 1] = pagesBefore[i] + pages;
+        }
+        return pagesBefore;
     }
 
     /// <summary>Gom mọi lựa chọn thành ExportOptions cụ thể cho exporter.</summary>
@@ -568,7 +675,7 @@ public sealed class ExportViewModel : BindableBase
         MaxWidth = s.MaxWidth,
     };
 
-    /// <summary>Giá trị của preset đang chọn; với Tuỳ chỉnh thì lấy từ các control.</summary>
+    /// <summary>Giá trị của mức đang dùng; với Tuỳ chỉnh thì lấy từ các control.</summary>
     private PresetSettings CurrentSettings()
     {
         if (!IsCustom) return PresetSettings.For(Preset);
@@ -576,12 +683,6 @@ public sealed class ExportViewModel : BindableBase
         int quality = (int)Math.Round(CustomQuality);
         int? maxWidth = double.IsNaN(CustomMaxWidth) ? null : (int)CustomMaxWidth;
         return new PresetSettings(quality, maxWidth);
-    }
-
-    private void CopyToCustom(PresetSettings settings)
-    {
-        CustomQuality = settings.PdfQuality;
-        CustomMaxWidth = settings.MaxWidth ?? double.NaN;
     }
 
     /// <summary>Sai số của ước tính so với thực tế, tính bằng %. Dương = ước tính cao hơn thực tế.</summary>
@@ -607,8 +708,4 @@ public sealed class ExportViewModel : BindableBase
     }
 
     private static string FallbackFileName() => $"ImageMerger_{DateTime.Now:yyyy-MM-dd}";
-
-    /// <summary>Ví dụ "JPEG 85 · rộng tối đa 2048 px".</summary>
-    private static string Describe(PresetSettings s) =>
-        s.MaxWidth is int w ? $"JPEG {s.PdfQuality} · rộng tối đa {w} px" : $"JPEG {s.PdfQuality} · giữ nguyên kích thước";
 }

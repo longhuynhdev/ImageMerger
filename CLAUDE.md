@@ -121,7 +121,7 @@ ImageMerger/
 │   └─ NaturalStringComparer.cs  // sắp xếp "img2" trước "img10"
 └─ Views/
     ├─ MainPage.xaml
-    └─ (đã gỡ ExportDialog: tuỳ chọn xuất nằm ở thanh đáy MainPage)
+    └─ (đã gỡ ExportDialog: tuỳ chọn xuất nằm ở bước 3, cột phải MainPage)
 ```
 
 **Nguyên tắc:**

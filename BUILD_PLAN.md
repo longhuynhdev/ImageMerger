@@ -113,7 +113,7 @@ Bối cảnh chung của dự án nằm trong `CLAUDE.md`.
 
 > **Đã gỡ PNG/WebP:** preset giờ chỉ gồm quality JPEG trong PDF và chiều rộng tối đa. Tuỳ chọn giảm màu PNG-8 đã bỏ.
 
-> **Giao diện mới (nhánh `redesign-export-bar`):** gỡ `ExportDialog` và `CommandBar`. Mức nén, nút Xuất PDF (Ctrl+E), tiến độ và kết quả nằm ở thanh đáy `MainPage`. Ô dung lượng ước tính đã có chỗ trong UI, chờ Phase 6 điền số.
+> **Giao diện mới (nhánh `redesign-export-bar`):** gỡ `ExportDialog` và `CommandBar`. Trang chính chia 3 bước cho người không rành công nghệ: (1) Thêm ảnh / Thêm file PDF, (2) Kiểm tra thứ tự trang với nút Lên/Xuống/Xoá luôn hiện, (3) Lưu thành file PDF: tên file, kích thước file (Nhỏ gọn / Vừa phải / Chất lượng cao nhất), "Tuỳ chỉnh nâng cao" trong `Expander`, nút Lưu (Ctrl+E) và thẻ kết quả.
 
 ---
 

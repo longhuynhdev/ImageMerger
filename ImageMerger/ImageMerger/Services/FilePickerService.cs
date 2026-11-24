@@ -10,14 +10,25 @@ namespace ImageMerger.Services;
 /// </summary>
 public sealed class FilePickerService(WindowId windowId) : IFilePickerService
 {
-    public async Task<IReadOnlyList<string>> PickImagesAsync()
+    public Task<IReadOnlyList<string>> PickImagesAsync() =>
+        PickFilesAsync(SupportedFormats.ImageExtensions, PickerLocationId.PicturesLibrary, PickerViewMode.Thumbnail);
+
+    public Task<IReadOnlyList<string>> PickPdfsAsync() =>
+        PickFilesAsync((string[])[SupportedFormats.PdfExtension], PickerLocationId.DocumentsLibrary, PickerViewMode.List);
+
+    /// <summary>
+    /// FileTypeFilter quyết định hộp thoại chỉ hiện những file có đuôi nào: nút "Thêm ảnh" không thấy PDF
+    /// và ngược lại, nên người dùng không chọn nhầm loại file.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> PickFilesAsync(
+        IEnumerable<string> extensions, PickerLocationId startLocation, PickerViewMode viewMode)
     {
         var picker = new FileOpenPicker(windowId)
         {
-            SuggestedStartLocation = PickerLocationId.PicturesLibrary,
-            ViewMode = PickerViewMode.Thumbnail,
+            SuggestedStartLocation = startLocation,
+            ViewMode = viewMode,
         };
-        foreach (string extension in SupportedFormats.InputExtensions)
+        foreach (string extension in extensions)
         {
             picker.FileTypeFilter.Add(extension);
         }

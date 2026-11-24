@@ -38,6 +38,9 @@ public sealed class MainViewModel : BindableBase
             .ToList());
 
         AddImagesCommand = new AsyncRelayCommand(AddImagesAsync);
+        AddPdfCommand = new AsyncRelayCommand(AddPdfAsync);
+        NewDocumentCommand = new RelayCommand(NewDocument);
+        DismissStatusCommand = new RelayCommand(() => IsStatusOpen = false);
         SortByNameCommand = new RelayCommand(SortByName, () => HasItems);
         SortByDateCommand = new RelayCommand(SortByDate, () => HasItems);
         ClearAllCommand = new RelayCommand(ClearAll, () => HasItems);
@@ -58,7 +61,7 @@ public sealed class MainViewModel : BindableBase
 
     // --- Thông báo (InfoBar) ---
 
-    /// <summary>TwoWay: InfoBar tự đặt lại false khi người dùng bấm nút đóng.</summary>
+    /// <summary>Đóng bằng nút "Đã hiểu" (<see cref="DismissStatusCommand"/>), không dùng nút X nhỏ của InfoBar.</summary>
     public bool IsStatusOpen
     {
         get => _isStatusOpen;
@@ -86,7 +89,17 @@ public sealed class MainViewModel : BindableBase
     // --- Command ---
     // Các command được tạo trong constructor. AsyncRelayCommand tự chặn bấm lặp trong lúc đang chạy.
 
+    /// <summary>Nút "Thêm ảnh": hộp thoại chỉ hiện file ảnh.</summary>
     public AsyncRelayCommand AddImagesCommand { get; }
+
+    /// <summary>Nút "Thêm file PDF": hộp thoại chỉ hiện file PDF.</summary>
+    public AsyncRelayCommand AddPdfCommand { get; }
+
+    /// <summary>Nút "Làm file mới" sau khi lưu xong: xoá danh sách (không hỏi lại vì file đã lưu) và ẩn thẻ kết quả.</summary>
+    public RelayCommand NewDocumentCommand { get; }
+
+    /// <summary>Nút "Đã hiểu" trên thông báo file không hỗ trợ.</summary>
+    public RelayCommand DismissStatusCommand { get; }
 
     public RelayCommand SortByNameCommand { get; }
 
@@ -102,6 +115,12 @@ public sealed class MainViewModel : BindableBase
         AddFiles(paths);
     }
 
+    private async Task AddPdfAsync()
+    {
+        IReadOnlyList<string> paths = await _filePickerService.PickPdfsAsync();
+        AddFiles(paths);
+    }
+
     /// <summary>
     /// Thêm file vào cuối danh sách. Dùng chung cho File Picker và kéo thả từ Explorer.
     /// File không hỗ trợ bị bỏ qua và được báo trong InfoBar.
@@ -113,7 +132,7 @@ public sealed class MainViewModel : BindableBase
         {
             ShowStatus(
                 InfoBarSeverity.Warning,
-                $"Đã bỏ qua {unsupported.Count} file không được hỗ trợ",
+                $"Đã bỏ qua {unsupported.Count} file không phải ảnh hoặc PDF",
                 string.Join(", ", unsupported.Select(Path.GetFileName)));
         }
 
@@ -160,12 +179,12 @@ public sealed class MainViewModel : BindableBase
 
     // --- Xuất file ---
 
-    /// <summary>Thanh xuất PDF ở đáy trang. Tạo một lần và giữ lựa chọn suốt phiên làm việc.</summary>
+    /// <summary>Bước 3 "Lưu thành file PDF". Tạo một lần và giữ lựa chọn suốt phiên làm việc.</summary>
     public ExportViewModel Export { get; }
 
     // --- Sắp xếp, xoá ---
 
-    /// <summary>Callback mà mỗi ImageItemViewModel gọi khi người dùng chọn Lên/Xuống trong menu.</summary>
+    /// <summary>Callback mà mỗi ImageItemViewModel gọi khi người dùng bấm nút Lên/Xuống.</summary>
     private void MoveItem(ImageItemViewModel item, MoveTarget target)
     {
         int oldIndex = Items.IndexOf(item);
@@ -173,10 +192,8 @@ public sealed class MainViewModel : BindableBase
 
         int newIndex = target switch
         {
-            MoveTarget.Top => 0,
             MoveTarget.Up => oldIndex - 1,
             MoveTarget.Down => oldIndex + 1,
-            MoveTarget.Bottom => Items.Count - 1,
             _ => oldIndex,
         };
         newIndex = Math.Clamp(newIndex, 0, Items.Count - 1);
@@ -209,6 +226,13 @@ public sealed class MainViewModel : BindableBase
         _thumbnailQueue.Clear();
     }
 
+    /// <summary>Danh sách trống thì ExportViewModel tự xoá tên file đã gõ (xem SetItems).</summary>
+    private void NewDocument()
+    {
+        ClearAll();
+        Export.DismissResult();
+    }
+
     /// <summary>Đưa Items về đúng thứ tự mới bằng Move(), không xoá rồi thêm lại (tránh tạo lại thumbnail).</summary>
     private void ApplyOrder(IEnumerable<ImageItemViewModel> ordered)
     {
@@ -228,7 +252,7 @@ public sealed class MainViewModel : BindableBase
         ClearAllCommand.NotifyCanExecuteChanged();
         // Xoá một item đang nhập sai thì nút Xuất phải bật lại.
         Export.SetPageRangeErrors(Items.Any(i => i.HasPageRangeError));
-        Export.SetItems(Items.Count, Items.FirstOrDefault()?.Path, Items.Sum(i => i.FileSizeBytes));
+        Export.SetItems(Items.Count, Items.FirstOrDefault()?.Path);
 
         // Cập nhật cờ đầu/cuối để menu Lên/Xuống của từng item bật/tắt đúng.
         for (int i = 0; i < Items.Count; i++)

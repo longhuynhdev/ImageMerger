@@ -1,7 +1,6 @@
 using ImageMerger.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Navigation;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
@@ -46,7 +45,7 @@ public sealed partial class MainPage : Page
         if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
 
         e.AcceptedOperation = DataPackageOperation.Copy;
-        e.DragUIOverride.Caption = "Thêm ảnh";
+        e.DragUIOverride.Caption = "Thả vào để thêm";
     }
 
     /// <summary>
@@ -72,19 +71,9 @@ public sealed partial class MainPage : Page
     }
 
     /// <summary>
-    /// Bấm vào tay cầm thì mở menu Lên/Xuống. Tapped không được phát ra nếu người dùng đã kéo,
-    /// nên kéo để đổi thứ tự và bấm để mở menu không lẫn vào nhau.
-    /// </summary>
-    private void OnDragHandleTapped(object sender, TappedRoutedEventArgs e)
-    {
-        var handle = (FrameworkElement)sender;
-        handle.ContextFlyout?.ShowAt(handle);
-        e.Handled = true;
-    }
-
-    /// <summary>
-    /// "Xoá tất cả…" là thao tác phá huỷ nên hỏi lại bằng ContentDialog (việc thuần UI, làm ở code-behind),
+    /// "Xoá tất cả" là thao tác phá huỷ nên hỏi lại bằng ContentDialog (việc thuần UI, làm ở code-behind),
     /// người dùng đồng ý thì mới gọi command của ViewModel.
+    /// Chữ trên nút nói rõ hậu quả ("Có, xoá tất cả" / "Không, giữ lại") thay vì "OK" / "Huỷ".
     /// ContentDialog cần XamlRoot để biết hiện trên cửa sổ nào.
     /// </summary>
     private async void OnClearAllClick(object sender, RoutedEventArgs e)
@@ -92,28 +81,15 @@ public sealed partial class MainPage : Page
         var dialog = new ContentDialog
         {
             XamlRoot = XamlRoot,
-            Title = "Xoá tất cả ảnh?",
-            Content = "Tất cả ảnh sẽ bị xoá khỏi danh sách. File gốc trên máy không bị ảnh hưởng.",
-            PrimaryButtonText = "Xoá tất cả",
-            CloseButtonText = "Huỷ",
+            Title = "Xoá tất cả trang khỏi danh sách?",
+            Content = "Các file ảnh và PDF gốc trên máy tính vẫn được giữ nguyên, chỉ danh sách trong ứng dụng bị xoá.",
+            PrimaryButtonText = "Có, xoá tất cả",
+            CloseButtonText = "Không, giữ lại",
             DefaultButton = ContentDialogButton.Close,
         };
         if (await dialog.ShowAsync() == ContentDialogResult.Primary)
         {
             ViewModel.ClearAllCommand.Execute(null);
         }
-    }
-
-    /// <summary>
-    /// Nút Xoá của mỗi dòng chỉ hiện khi rê chuột lên dòng đó (việc thuần hiển thị).
-    /// FindName tìm phần tử có x:Name trong cùng DataTemplate.
-    /// </summary>
-    private void OnItemPointerEntered(object sender, PointerRoutedEventArgs e) => SetDeleteButtonOpacity(sender, 1);
-
-    private void OnItemPointerExited(object sender, PointerRoutedEventArgs e) => SetDeleteButtonOpacity(sender, 0);
-
-    private static void SetDeleteButtonOpacity(object row, double opacity)
-    {
-        if (((FrameworkElement)row).FindName("DeleteButton") is UIElement button) button.Opacity = opacity;
     }
 }
