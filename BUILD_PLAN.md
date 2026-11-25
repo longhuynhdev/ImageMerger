@@ -13,10 +13,14 @@ Bối cảnh chung của dự án nằm trong `CLAUDE.md`.
 | 3 | Xuất PDF | 4–6h | **MVP** |
 | 4 | Xuất PNG/WebP ghép dọc và hộp thoại Export | 6–10h | |
 | 5 | Mức nén (presets) | 4–6h | |
-| 6 | Dự đoán dung lượng | 8–12h | **Selling point** |
+| 6 | Dự đoán dung lượng | 8–12h | Nền tảng cho Phase T |
+| T | Dung lượng mục tiêu (mặc định ≤ 20 MB, tự chọn mức nén) | 8–14h | **Selling point** |
 | 7 | Định dạng khó: HEIC, PDF đầu vào | 6–10h | |
 | 8 | Trau chuốt và đóng gói | 8–15h | **v1.0** |
 | — | **Tổng** | **khoảng 48–81h** | |
+| R | Đổi tên: hiển thị "Minh Chứng Ơi" (đã chốt), tên trong code (lên plan sau) | 1–4h | |
+| C | Tách nghiệp vụ ra thư viện `ImageMerger.Core` (làm dần, xen kẽ Phase 7–8) | 4–8h | |
+| W | Bản web cho điện thoại (**đang cân nhắc, chưa làm**) | — | |
 
 ---
 
@@ -128,12 +132,55 @@ Bối cảnh chung của dự án nằm trong `CLAUDE.md`.
 - [x] Sau khi xuất: hiện **dung lượng thật** bên cạnh dung lượng ước tính trong `InfoBar`.
 - [x] Ghi log (Debug output) các cặp ước tính/thực tế, kèm giá trị "k gợi ý" cho hệ số hiệu chỉnh.
 - [ ] Thử với khoảng 5 bộ ảnh **thật** khác nhau để chọn **hệ số hiệu chỉnh** (`SampleSizeEstimator.ScaleExponent`, đang là giá trị tạm 0.1).
-- [ ] (Khuyến khích) Viết unit test cho `SampleSizeEstimator` trong một project test riêng. *(Cần thêm package test framework, chờ duyệt.)*
+- [ ] (Khuyến khích) Viết unit test cho `SampleSizeEstimator` trong một project test riêng. *(Chuyển sang Phase C, bước C5.)*
 
 **Xong khi:** sai số ≤ ±20%, ước tính 20 ảnh mất dưới 1 giây, kéo slider không gây giật UI.
 
 > **Đo thử (ảnh tổng hợp, 20 ảnh 4032×3024):** lần đầu (tạo bản mẫu) 0,67 s, đổi quality 0,07 s, đổi chiều rộng ≈ 0 s.
 > Sai số chưa đạt: ảnh tổng hợp có nhiễu cho ra khoảng −46%. Ảnh nhiễu không giống ảnh thật, nên phải đo lại bằng ảnh thật.
+
+---
+
+## Phase T — Dung lượng mục tiêu (selling point) ⭐
+
+**Bối cảnh:** xem `CLAUDE.md` mục 3.0. Người dùng là người trung niên, không cần hiểu quality hay chiều rộng. Họ chỉ cần file **lọt qua giới hạn của cổng nộp**.
+
+**Học được:** tìm kiếm nhị phân trên kết quả ước tính, `Expander`, thiết kế UX cho người không rành công nghệ.
+
+**Điều kiện trước:** Phase 6 phải chọn xong hệ số hiệu chỉnh bằng ảnh thật. Ước tính sai thì app chọn sai mức nén.
+
+### Hành vi (đã chốt)
+- Giới hạn mặc định **≤ 20 MB**. Người dùng chỉnh được.
+- Khi thêm, xoá ảnh, đổi khoảng trang PDF hoặc đổi giới hạn, app **tự chọn mức nén** để file ≤ giới hạn với chất lượng cao nhất có thể. Không cần nén thì giữ mức cao nhất.
+- Preset và slider hiện tại chuyển vào phần **Tuỳ chỉnh nâng cao**.
+
+### Thiết kế đề xuất (chưa chốt, xem lại trước khi code)
+1. **Thang mức nén** thay cho chỉ chỉnh quality: một danh sách các bậc `(quality, chiều rộng tối đa)`, xếp từ nét nhất đến nhẹ nhất. Ví dụ: `(95, gốc) → (85, gốc) → (85, 2560) → (80, 2048) → (75, 1600) → (70, 1280) → (65, 1024)`.
+   - Lý do: với giấy tờ có chữ, quality quá thấp làm chữ bị nhoè và có vệt khối JPEG, còn giảm độ phân giải vừa phải vẫn đọc được. Phối hợp cả hai thì chữ giữ được rõ lâu hơn.
+   - Dung lượng giảm dần theo bậc, nên **tìm nhị phân** trên thang (khoảng 3 lần ước tính). Đo ở Phase 6 cho thấy mỗi lần ước tính mất khoảng 0,07 s, đủ nhanh.
+   - Các bậc cụ thể cần thí nghiệm với ảnh giấy tờ thật.
+2. **Biên an toàn:** ước tính có sai số (chỉ tiêu ±20%), nên đặt mục tiêu khoảng **85–90% giới hạn**. Ví dụ giới hạn 20 MB thì nhắm ≤ 17–18 MB.
+3. **Đảm bảo sau khi xuất:** đo dung lượng thật. Nếu vượt giới hạn, tự xuất lại ở bậc thấp hơn (tối đa vài lần) rồi báo cho người dùng biết.
+4. **Cách tính MB:** dùng `1 MB = 1.000.000 byte` khi so với giới hạn. Con số này nhỏ hơn `1024 × 1024`, nên file an toàn với cả những cổng tính theo cách còn lại.
+5. **Không đạt được giới hạn:** ví dụ riêng phần trang PDF giữ nguyên đã vượt giới hạn, hoặc bậc thấp nhất vẫn vượt. Báo rõ lý do bằng lời dễ hiểu, gợi ý bỏ bớt ảnh hoặc trang. Không tự giảm chất lượng xuống mức không đọc được.
+6. **Hiển thị:** kiểu `≈ 14,2 MB / 20 MB ✓`, kèm mô tả chất lượng bằng chữ (ví dụ "Rất nét", "Nét", "Đủ đọc") thay cho con số quality.
+7. **Chọn giới hạn:** vài nút chọn nhanh (2 / 5 / 10 / 20 MB) và ô nhập số.
+
+### Cần chốt trước khi code
+- [ ] Các bậc của thang mức nén (thí nghiệm với ảnh giấy tờ thật).
+- [ ] Người dùng chỉnh tay ở phần nâng cao thì sao: tắt chế độ tự động, hay vẫn cảnh báo khi vượt giới hạn?
+- [ ] Danh sách nút chọn nhanh và cách hiển thị chất lượng bằng chữ.
+- [ ] Có nhớ giới hạn lần trước không (liên quan Phase 8, `LocalSettings`).
+
+### Task
+- [ ] Logic chọn bậc nén theo giới hạn, nằm trong Services (thuần C#, không phụ thuộc WinUI, test được).
+- [ ] UI chọn giới hạn ở thanh đáy, mặc định 20 MB.
+- [ ] Chuyển preset và slider vào `Expander` "Tuỳ chỉnh nâng cao".
+- [ ] Tự tính lại khi danh sách hoặc giới hạn thay đổi (debounce và huỷ lần tính trước như Phase 6).
+- [ ] Kiểm tra dung lượng thật sau khi xuất, tự xuất lại nếu vượt.
+- [ ] Thông báo khi không thể đạt giới hạn.
+
+**Xong khi:** với khoảng 5 bộ ảnh thật và các giới hạn 2 / 5 / 20 MB, file xuất ra **luôn ≤ giới hạn**. Bậc được chọn không thấp hơn bậc tốt nhất có thể quá 1 bậc (so với cách thử xuất từng bậc).
 
 ---
 
@@ -182,7 +229,7 @@ Bối cảnh chung của dự án nằm trong `CLAUDE.md`.
   > **Cần chốt trước khi code:**
   > - [x] Thư viện PDF: đã chọn **PdfPig** (xem Bước 1). PdfPig cũng đọc được chữ và ảnh trong trang, dùng lại được cho bước phân loại.
   > - [ ] Thí nghiệm nhỏ (ngoài project): độ chính xác khi phân loại trang chữ, scan, scan có OCR trên file thật.
-  > - [ ] Đổi tên project nếu PDF đầu vào trở thành use case chính (tên nên nói về kết quả là PDF gọn nhẹ, không nói về "merge"). Làm thành task riêng, đổi `DisplayName` trước.
+  > - [x] Đổi tên project: đã chốt tên hiển thị "Minh Chứng Ơi", xem Phase R.
   >
   > *Phương án cũ, đã cân nhắc và tạm bỏ:* chuyển mọi trang PDF thành ảnh (đơn giản, không cần thư viện, nhưng mất chữ, link và bookmark).
 - [ ] File hỏng hoặc không đọc được: bỏ qua, gom lỗi lại và hiện một `InfoBar` tổng hợp, không dừng cả lô.
@@ -205,9 +252,101 @@ Bối cảnh chung của dự án nằm trong `CLAUDE.md`.
 
 ---
 
+## Phase R — Đổi tên
+
+### R1. Đổi tên hiển thị thành "Minh Chứng Ơi" (đã chốt)
+- [ ] `Package.appxmanifest`: `<DisplayName>` (dòng 20) và `uap:VisualElements DisplayName` (dòng 42).
+- [ ] `MainWindow.xaml`: `Title` của `Window` và `TitleBar`.
+- [ ] **Không đổi `Identity Name`** trong manifest. Đổi nó thì Windows coi là một app khác, bản cài cũ không được cập nhật và mất `LocalSettings`.
+- [ ] Tagline: chưa chốt, các gợi ý ghi ở `CLAUDE.md` mục 1.
+
+**Xong khi:** Start menu, thanh tiêu đề và taskbar đều hiện "Minh Chứng Ơi".
+
+### R2. Đổi tên trong code sang tên tiếng Anh (lên plan sau)
+- Lý do: app thuần Việt, nhưng code theo chuẩn tiếng Anh thì có lợi khi xin việc sau này.
+- [ ] Chọn tên tiếng Anh.
+- Phạm vi dự kiến: tên thư mục, `.slnx`, `.csproj`, `RootNamespace`, namespace trong toàn bộ `.cs`/`.xaml`, `docfx.json`, tên repo.
+- ⚠️ **Liên quan Phase C:** làm R2 trước C1 thì `ImageMerger.Core` được tạo với tên mới ngay từ đầu. Làm sau thì phải đổi tên cả project Core.
+
+---
+
+## Phase C — Tách nghiệp vụ ra thư viện `ImageMerger.Core`
+
+**Học được:** class library, project reference, package đi theo project reference (transitive), `.slnx` nhiều project, unit test.
+
+**Vì sao làm, kể cả khi chưa có bản web:**
+- Compiler tự kiểm tra quy tắc "Service không tham chiếu WinUI" (`CLAUDE.md` mục 6). Core là `net10.0` thuần nên không `using` được WinUI hay WinRT.
+- Unit test chạy bằng project `net10.0` thường, không cần target Windows hay chạy packaged.
+- Bản web (Phase W), CLI hoặc công cụ đo đạc sau này chỉ cần tham chiếu Core.
+
+**Cách làm:** mỗi bước là **một commit nhỏ, build được, chạy được**. Chủ yếu là di chuyển file, không sửa logic. Làm xen kẽ với Phase 7–8 được.
+
+**Quyết định đã chốt:**
+- Tên project: `ImageMerger.Core`, đặt cạnh project app trong thư mục `ImageMerger/` và cùng `ImageMerger.slnx`.
+- TFM: `net10.0`. Bật `Nullable`, `ImplicitUsings`, `GenerateDocumentationFile` giống app. Platform `AnyCPU` (app vẫn x86/x64/ARM64).
+- **Giữ nguyên namespace** khi chuyển file (`ImageMerger.Models`, `ImageMerger.Services...`, `ImageMerger.Helpers`), để ViewModel và View không phải sửa `using`. Đổi namespace (nếu muốn) làm task riêng sau.
+- Package `Magick.NET-Q8-AnyCPU` và `PdfPig` chuyển sang Core. App nhận lại qua project reference.
+
+### Các bước
+
+> **Trạng thái:** C1–C4 đã code xong và build được (`dotnet build ImageMerger.slnx`). Đã kiểm tra: Core không còn `using` Windows/WinUI; console `net10.0` riêng gọi Core tạo được thumbnail, ước tính và xuất PDF 8 trang. ⚠️ **Chưa chạy thử app WinUI bằng tay và chưa commit.**
+
+- [x] **C1. Tạo project rỗng.** Tạo `ImageMerger.Core.csproj`, thêm vào `ImageMerger.slnx`, cho app tham chiếu Core. Chuyển hai package Magick.NET và PdfPig sang Core. Thêm `ImageMerger.Core.dll` vào `docfx.json`.
+  - [x] DLL native `Magick.Native-Q8-x64.dll` vẫn được copy vào output của app (Debug x64).
+  - [ ] Chạy app, thêm ảnh và PDF, xuất thử một PDF.
+  - [ ] Kiểm tra bản publish Release, vì app bật `PublishTrimmed` (trimming chỉ chạy lúc publish).
+- [x] **C2. Chuyển code thuần C#** (không dùng thư viện ngoài): `Models/*`, `Helpers/NaturalStringComparer.cs`, `Helpers/PageRangeParser.cs`, `Helpers/FileSizeFormatter.cs`, `Services/SupportedFormats.cs`.
+- [x] **C3. Chuyển các service dùng Magick.NET / PdfPig:** `Services/ImageHeader.cs`, `Services/MagickSetup.cs`, `Services/Export/*`, `Services/Compression/*`.
+- [x] **C4. Tách đôi `ThumbnailService`** (đây là file duy nhất trong Services vừa có phần thuần vừa có phần Windows):
+  - `CreateThumbnail` (Magick.NET) và `ThumbnailResult` chuyển sang Core.
+  - `CreatePdfThumbnailAsync` (dùng `Windows.Data.Pdf`) và `PdfThumbnailResult` ở lại app, thành class riêng `PdfThumbnailService`.
+  - Cập nhật `MainWindow.xaml.cs`, `MainViewModel`, `ImageItemViewModel.LoadThumbnailAsync` để nhận hai service.
+  - Chưa tạo interface cho phần render PDF. Chỉ thêm khi bản web thật sự cần (lúc đó mới biết web render PDF bằng gì).
+- [ ] **C5. Project test `ImageMerger.Core.Tests`** (`net10.0`). ⏸️ *Chờ duyệt package test framework (xUnit hoặc MSTest).*
+  - Test trước những phần dễ và đáng test: `PageRangeParser`, `NaturalStringComparer`, `FileSizeFormatter`.
+  - Sau đó: `SampleSizeEstimator` với vài ảnh trong `testdata/`, kiểm tra sai số ≤ ±20% (gộp task test ở Phase 6).
+- [x] **C6. Cập nhật tài liệu:** cây thư mục (`CLAUDE.md` mục 6), tech stack (mục 4), lệnh build (mục 9).
+  - [ ] Thêm lệnh chạy test vào mục 9 sau khi làm C5.
+
+**Ở lại project app (không chuyển):** `Views/*`, `ViewModels/*`, `Helpers/BindableBase.cs`, `Helpers/RelayCommand.cs` (chỉ có ích cho MVVM/XAML, Blazor hay React không dùng), `Helpers/XamlFunctions.cs`, `Services/FilePickerService.cs` + `IFilePickerService.cs`, `PdfThumbnailService`.
+
+**Chưa làm ở phase này (tránh thiết kế trước khi biết yêu cầu):**
+- Đổi API từ đường dẫn file (`string path`) sang `Stream`. Web sẽ cần, nhưng chỉ làm khi bắt đầu Phase W.
+- Tạo interface cho từng service chỉ để "sau này thay được".
+
+**Xong khi:** solution có 2–3 project, build sạch. App chạy đủ luồng thêm ảnh + PDF → ước tính → xuất PDF như trước khi tách. Core không có `using` nào tới `Microsoft.UI`, `Microsoft.Windows` hay `Windows.*`.
+
+---
+
+## Phase W — Bản web cho điện thoại (đang cân nhắc, chưa làm)
+
+> Ghi lại hướng đã thảo luận, **chưa chốt và chưa code**. Chỉ bắt đầu sau Phase C.
+
+**Hướng đang nghiêng về:**
+- Backend: **ASP.NET Core Web API**, xử lý ảnh trên server, dùng lại `ImageMerger.Core`.
+- Frontend: **React + Vite (SPA, TypeScript)**, host tĩnh. Đã cân nhắc Blazor WASM (tải lần đầu nặng trên 4G), Blazor Server (cần giữ kết nối SignalR, không hợp mạng di động), TanStack Start (SSR và server functions trùng vai trò với .NET API).
+- Người dùng mục tiêu: người trung niên, dân văn phòng ở Việt Nam, dùng **điện thoại**. Có thể làm PWA thay cho app native.
+- Repo: nghiêng về để chung repo với app WinUI cho dễ dùng chung Core.
+
+**Vấn đề đã biết, cần thiết kế khi bắt đầu:**
+- **Trình duyệt trong Zalo:** upload và tải file hay lỗi. Cần test sớm, cân nhắc Web Share API để chia sẻ PDF.
+- **Dữ liệu cá nhân** (CCCD, hợp đồng…): xoá file ngay sau khi xử lý, file tạm có TTL, không log nội dung ảnh, chỉ HTTPS. Tham khảo Nghị định 13/2023.
+- **Băng thông upload:** thu nhỏ ảnh trên trình duyệt trước khi upload.
+- **Upload lớn:** giới hạn request body mặc định của Kestrel, multipart streaming.
+- **Việc nặng CPU:** hàng đợi job (`Channel<T>` + `BackgroundService`), báo tiến độ bằng polling/SSE, rate limiting, giới hạn số job song song, `ResourceLimits` cho Magick.NET.
+- **Ước tính dung lượng:** server đo bytes-per-pixel ở vài mức quality rồi gửi về, client nội suy tại chỗ, kéo slider không cần gọi API.
+- **Render thumbnail PDF** trên server không có `Windows.Data.Pdf`, chưa có lời giải.
+- **Chi phí server** tăng theo số người dùng (khác với app desktop).
+
+**Cần chốt trước khi làm:**
+- [ ] Frontend: React + Vite hay lựa chọn khác.
+- [ ] Hosting và ngân sách hằng tháng.
+- [ ] Cập nhật `CLAUDE.md` mục 2: "đa nền tảng" đang nằm trong Non-goals.
+
+---
+
 ## Ý tưởng mở rộng (sau v1.0)
 
-- [ ] Chế độ **dung lượng mục tiêu**: "File ≤ 5 MB", app tự tìm quality bằng binary search.
 - [ ] Xem trước trước/sau khi nén: phóng to một vùng ảnh để so sánh chất lượng.
 - [ ] Xuất ảnh dài (JPEG) để gửi qua ứng dụng chat. Có thể dựa trên code ghép ảnh ở tag `before-pdf-only`.
 - [ ] PDF khổ A4 với lề, căn ảnh vừa trang.

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Nghiệp vụ dùng chung: models, xử lý ảnh, ước tính dung lượng, xuất PDF.
+    TFM net10.0 thuần (không có "-windows"), nên project này không thể tham chiếu WinUI/WinRT.
+    Nhờ vậy compiler tự kiểm tra quy tắc "Service không tham chiếu WinUI" (CLAUDE.md mục 6).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>ImageMerger</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="15.1.0" />
+    <PackageReference Include="PdfPig" Version="0.1.16" />
+  </ItemGroup>
+</Project>

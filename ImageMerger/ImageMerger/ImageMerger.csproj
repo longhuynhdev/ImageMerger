@@ -51,11 +51,14 @@
     <PropertyGroup> above to opt out.
   -->
   <ItemGroup>
-    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="15.1.0" />
-    <PackageReference Include="PdfPig" Version="0.1.16" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2957" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.7.0" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinApp" Version="0.8.0" />
+  </ItemGroup>
+
+  <!-- Magick.NET và PdfPig đến từ ImageMerger.Core (package đi theo project reference). -->
+  <ItemGroup>
+    <ProjectReference Include="..\ImageMerger.Core\ImageMerger.Core.csproj" />
   </ItemGroup>
 
   <!--
