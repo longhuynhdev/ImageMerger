@@ -226,13 +226,16 @@ public sealed class ImageItemViewModel : BindableBase
     /// còn sau <c>await</c> code tự quay lại UI thread (nhờ SynchronizationContext của WinUI),
     /// nên tạo <see cref="BitmapImage"/> ở đây là an toàn.
     /// </summary>
-    public async Task LoadThumbnailAsync(ThumbnailService thumbnailService, CancellationToken cancellationToken)
+    public async Task LoadThumbnailAsync(
+        ThumbnailService thumbnailService,
+        PdfThumbnailService pdfThumbnailService,
+        CancellationToken cancellationToken)
     {
         try
         {
             if (IsPdf)
             {
-                PdfThumbnailResult pdf = await thumbnailService.CreatePdfThumbnailAsync(
+                PdfThumbnailResult pdf = await pdfThumbnailService.CreatePdfThumbnailAsync(
                     Path, ThumbnailService.DefaultMaxSize, cancellationToken);
                 _pdfPageCount = pdf.PageCount;
                 OnPropertyChanged(nameof(IsPageRangeEnabled));

@@ -18,6 +18,7 @@ public sealed class MainViewModel : BindableBase
 
     private readonly IFilePickerService _filePickerService;
     private readonly ThumbnailService _thumbnailService;
+    private readonly PdfThumbnailService _pdfThumbnailService;
 
     /// <summary>Các ảnh đang chờ tạo thumbnail. Chỉ truy cập trên UI thread nên không cần lock.</summary>
     private readonly Queue<ImageItemViewModel> _thumbnailQueue = new();
@@ -26,11 +27,13 @@ public sealed class MainViewModel : BindableBase
     public MainViewModel(
         IFilePickerService filePickerService,
         ThumbnailService thumbnailService,
+        PdfThumbnailService pdfThumbnailService,
         PdfExporter pdfExporter,
         ISizeEstimator sizeEstimator)
     {
         _filePickerService = filePickerService;
         _thumbnailService = thumbnailService;
+        _pdfThumbnailService = pdfThumbnailService;
 
         // Kích thước có thể chưa biết (thumbnail chưa xong), exporter và bộ ước tính không cần vì chúng tự đọc lại ảnh gốc.
         Export = new ExportViewModel(filePickerService, pdfExporter, sizeEstimator, () => Items
@@ -149,7 +152,7 @@ public sealed class MainViewModel : BindableBase
             while (_thumbnailQueue.TryDequeue(out var item))
             {
                 if (!Items.Contains(item)) continue; // đã bị xoá trong lúc chờ
-                await item.LoadThumbnailAsync(_thumbnailService, CancellationToken.None);
+                await item.LoadThumbnailAsync(_thumbnailService, _pdfThumbnailService, CancellationToken.None);
             }
         }
         finally

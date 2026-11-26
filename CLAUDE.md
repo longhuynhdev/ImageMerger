@@ -1,4 +1,4 @@
-# CLAUDE.md — ImageMerger
+# CLAUDE.md — Minh Chứng Ơi (tên trong code: ImageMerger)
 
 > File này là bối cảnh chung của dự án dành cho Claude (và cho chính tôi).
 > Kế hoạch triển khai chi tiết theo từng phase nằm ở **`BUILD_PLAN.md`**.
@@ -7,7 +7,18 @@
 
 ## 1. Mục đích dự án
 
-**ImageMerger** là ứng dụng desktop Windows viết bằng **WinUI 3**. Ứng dụng gộp nhiều ảnh (và các trang PDF) thành **một file PDF duy nhất**, mỗi ảnh một trang. Người dùng có thể **chọn mức nén** và **xem trước dung lượng file đầu ra** trước khi xuất.
+**Minh Chứng Ơi** là ứng dụng desktop Windows viết bằng **WinUI 3**. Ứng dụng gộp nhiều ảnh (và các trang PDF) thành **một file PDF duy nhất**, mỗi ảnh một trang, với **dung lượng nằm trong giới hạn của cổng nộp** (xem mục 3).
+
+- **Người dùng mục tiêu:** người trung niên, nhân viên văn phòng ở Việt Nam cần nộp minh chứng và hồ sơ lên các cổng thông tin.
+- **Miễn phí, không kiếm tiền.** Mục tiêu là hỗ trợ người dùng. Khi phải chọn, ưu tiên **sự thuận tiện cho người dùng** hơn là thêm tính năng.
+- **Tên:**
+  - Tên hiển thị cho người dùng: **Minh Chứng Ơi** (đã chốt).
+  - Tên trong code (namespace, repo, project) dùng **tiếng Anh**, hiện tại vẫn là `ImageMerger`. Sẽ đổi sang tên tiếng Anh khác, xem `BUILD_PLAN.md` Phase R.
+- **Tagline (chưa chốt, đang cân nhắc):**
+  - "Nộp là lọt, không lo quá dung lượng."
+  - "Gộp giấy tờ thành một file PDF, vừa đúng giới hạn cổng nộp."
+  - "Cổng giới hạn 5 MB? Có ngay file vừa đủ."
+- **Lưu ý khi đặt tên và viết nội dung:** không dùng từ pháp lý ("chứng thực", "công chứng", "sao y"), không làm giống app hoặc cổng của nhà nước. Ghi rõ đây là công cụ miễn phí, không phải dịch vụ của cơ quan nhà nước.
 
 Đây đồng thời là **dự án học WinUI 3** của tôi, nên:
 - Ưu tiên code **dễ đọc, đúng chuẩn MVVM** hơn là code ngắn hoặc "thông minh".
@@ -21,7 +32,7 @@
 2. Hiển thị danh sách ảnh dạng thumbnail. Người dùng **sắp xếp lại** (kéo thả hoặc menu Lên/Xuống) và **xoá** từng ảnh.
 3. Nút **"Thêm ảnh" luôn nằm cuối danh sách** (`ListView.Footer`), để người dùng thêm tiếp liên tục.
 4. **Xuất PDF**: mỗi ảnh là một trang.
-5. **Chọn mức nén và dự đoán dung lượng**. Đây là selling point, xem mục 3.
+5. **File xuất ra nằm trong giới hạn dung lượng của cổng nộp**: app tự chọn mức nén, người dùng chỉ cần chọn giới hạn. Đây là selling point, xem mục 3.
 
 ### Không làm ở giai đoạn đầu (Non-goals)
 - Chỉnh sửa ảnh (crop, filter, vẽ), OCR.
@@ -31,11 +42,19 @@
 
 ---
 
-## 3. Selling point: chọn mức nén và dự đoán dung lượng
+## 3. Selling point: file PDF vừa giới hạn của cổng nộp
 
-Phần lớn công cụ gộp ảnh chỉ có nút "Xuất". Người dùng không biết file ra sẽ nặng bao nhiêu, phải xuất thử rồi xuất lại. ImageMerger cho phép **chọn mức nén và thấy ngay dung lượng ước tính** trước khi xuất.
+Các cổng nộp minh chứng và hồ sơ thường giới hạn dung lượng file (2, 5, 10, 20 MB...). Phần lớn công cụ gộp ảnh chỉ có nút "Xuất": người dùng không biết file ra nặng bao nhiêu, nộp lên bị từ chối rồi phải làm lại. Người trung niên lại thường không hiểu "quality 85" là gì.
 
-### 3.1. Mức nén (presets)
+### 3.0. Dung lượng mục tiêu (tính năng chính)
+
+- Người dùng chỉ chọn **giới hạn dung lượng**. Mặc định **≤ 20 MB**, có thể chỉnh.
+- Khi thêm, xoá ảnh hoặc đổi giới hạn, app **tự chọn mức nén** sao cho file ≤ giới hạn mà **chất lượng cao nhất có thể**. Nếu không cần nén thì không nén.
+- File xuất ra **không bao giờ vượt giới hạn mà không báo** người dùng.
+- Các preset và slider ở mục 3.1 chuyển thành **tuỳ chọn nâng cao**.
+- Chi tiết thiết kế xem `BUILD_PLAN.md` Phase T.
+
+### 3.1. Mức nén (presets, tuỳ chọn nâng cao)
 
 | Preset | Quality JPEG (bên trong PDF) | Chiều rộng tối đa |
 |---|---|---|
@@ -64,7 +83,6 @@ Phần lớn công cụ gộp ảnh chỉ có nút "Xuất". Người dùng khô
 
 **Mở rộng sau (stretch):**
 - Chế độ **"Chính xác"**: encode toàn bộ vào bộ nhớ khi tổng số pixel nhỏ.
-- Chế độ **dung lượng mục tiêu**, ví dụ "File phải ≤ 5 MB": app tự tìm quality phù hợp bằng binary search trên bản mẫu.
 - Xem trước trước/sau khi nén (phóng to một vùng ảnh) để người dùng thấy chất lượng.
 
 ---
@@ -81,7 +99,9 @@ Phần lớn công cụ gộp ảnh chỉ có nút "Xuất". Người dùng khô
 | Ghi PDF (đầu ra) | **PdfPig** (Apache 2.0): chép nguyên trang từ PDF đầu vào và nhúng ảnh JPEG. Chỉ gọi `Dispose()`, không gọi `Build()` (xem `PdfExporter`). |
 | File Picker | `Microsoft.Windows.Storage.Pickers` (`FileOpenPicker`, `FileSavePicker`) với `AppWindow.Id`. Không dùng `InitializeWithWindow` kiểu cũ. |
 
-Target framework: `net10.0-windows10.0.19041.0`
+Target framework:
+- App WinUI (`ImageMerger`): `net10.0-windows10.0.19041.0`
+- Thư viện nghiệp vụ (`ImageMerger.Core`): `net10.0` thuần. Magick.NET và PdfPig được khai báo ở đây, app nhận lại qua project reference.
 
 **Không thêm thư viện ngoài danh sách trên khi chưa hỏi tôi.**
 
@@ -100,33 +120,45 @@ Target framework: `net10.0-windows10.0.19041.0`
 ## 6. Kiến trúc và cấu trúc thư mục
 
 ```
-ImageMerger/
-├─ Models/
-│   ├─ ImageSourceInfo.cs        // Path, PageIndex?, PixelWidth, PixelHeight
-│   ├─ ExportOptions.cs          // Preset, Quality, MaxWidth
-│   └─ CompressionPreset.cs
-├─ ViewModels/
-│   ├─ MainViewModel.cs          // ObservableCollection<ImageItemViewModel>, các command
-│   ├─ ImageItemViewModel.cs     // Thumbnail, DisplayName, Move/Remove commands
-│   └─ ExportViewModel.cs        // tuỳ chọn xuất + EstimatedSize
-├─ Services/
-│   ├─ ImageLoaderService.cs     // file → danh sách ImageSourceInfo (PDF tách trang)
-│   ├─ ThumbnailService.cs       // tạo thumbnail khoảng 240 px
-│   ├─ Export/
-│   │   └─ PdfExporter.cs        // PdfPig: ảnh nén JPEG một trang, PDF đầu vào chép nguyên trang
-│   └─ Compression/
-│       ├─ ISizeEstimator.cs
-│       └─ SampleSizeEstimator.cs
-├─ Helpers/
-│   └─ NaturalStringComparer.cs  // sắp xếp "img2" trước "img10"
-└─ Views/
-    ├─ MainPage.xaml
-    └─ (đã gỡ ExportDialog: tuỳ chọn xuất nằm ở thanh đáy MainPage)
+ImageMerger/                         // thư mục solution, chứa ImageMerger.slnx
+├─ ImageMerger.Core/                 // net10.0 thuần: nghiệp vụ dùng chung, không phụ thuộc Windows
+│   ├─ Models/
+│   │   ├─ ImageSourceInfo.cs        // Path, PageIndex?, PixelWidth, PixelHeight
+│   │   ├─ ExportOptions.cs          // Preset, Quality, MaxWidth
+│   │   ├─ CompressionPreset.cs
+│   │   └─ PresetSettings.cs
+│   ├─ Services/
+│   │   ├─ ThumbnailService.cs       // thumbnail ảnh bằng Magick.NET, khoảng 240 px
+│   │   ├─ ImageHeader.cs, MagickSetup.cs, SupportedFormats.cs
+│   │   ├─ Export/
+│   │   │   └─ PdfExporter.cs        // PdfPig: ảnh nén JPEG một trang, PDF đầu vào chép nguyên trang
+│   │   └─ Compression/
+│   │       ├─ ISizeEstimator.cs
+│   │       └─ SampleSizeEstimator.cs
+│   └─ Helpers/
+│       ├─ NaturalStringComparer.cs  // sắp xếp "img2" trước "img10"
+│       ├─ PageRangeParser.cs
+│       └─ FileSizeFormatter.cs
+└─ ImageMerger/                      // app WinUI, tham chiếu ImageMerger.Core
+    ├─ ViewModels/
+    │   ├─ MainViewModel.cs          // ObservableCollection<ImageItemViewModel>, các command
+    │   ├─ ImageItemViewModel.cs     // Thumbnail, DisplayName, Move/Remove commands
+    │   └─ ExportViewModel.cs        // tuỳ chọn xuất + EstimatedSize
+    ├─ Services/
+    │   ├─ FilePickerService.cs      // Microsoft.Windows.Storage.Pickers
+    │   └─ PdfThumbnailService.cs    // thumbnail PDF bằng Windows.Data.Pdf (chỉ có trên Windows)
+    ├─ Helpers/
+    │   ├─ BindableBase.cs, RelayCommand.cs  // MVVM tự viết
+    │   └─ XamlFunctions.cs
+    └─ Views/
+        └─ MainPage.xaml             // tuỳ chọn xuất nằm ở thanh đáy (đã gỡ ExportDialog)
 ```
+
+Namespace giữ như cũ (`ImageMerger.Models`, `ImageMerger.Services...`, `ImageMerger.Helpers`) dù file nằm ở project nào.
 
 **Nguyên tắc:**
 - View chỉ binding vào ViewModel, **không gọi Service trực tiếp từ code-behind**. Ngoại lệ: các việc thuần UI như mở dialog.
-- Service không tham chiếu tới kiểu dữ liệu của WinUI, để có thể test bằng unit test.
+- Service không tham chiếu tới kiểu dữ liệu của WinUI, để có thể test bằng unit test. Code nghiệp vụ mới đặt trong **`ImageMerger.Core`**. Chỉ code cần API Windows (picker, `Windows.Data.Pdf`...) mới đặt ở project app.
 - **UI chỉ giữ thumbnail.** Ảnh gốc chỉ được đọc khi xuất hoặc ước tính, xử lý **lần lượt từng ảnh** và `Dispose` ngay sau khi dùng.
 
 ---
@@ -158,8 +190,9 @@ ImageMerger/
 ## 9. Build và chạy
 
 ```bash
+# chạy trong thư mục ImageMerger/ (nơi có ImageMerger.slnx), build cả app và ImageMerger.Core
 dotnet restore
-dotnet build -c Debug -p:Platform=x64
+dotnet build ImageMerger.slnx -c Debug -p:Platform=x64
 ```
 
 Chạy và debug bằng **Visual Studio** (bản hỗ trợ .NET 10, đã cài workload *WinUI application development*), profile **Packaged**.
